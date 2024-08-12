@@ -4,10 +4,11 @@
 ## 订阅转换远程配置:
 > 修改自https://github.com/ACL4SSR/ACL4SSR
 ``` sh
-
 https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config.ini
+```
 
-# cdn加速
+``` sh
+# jsdelivr 加速
 https://cdn.jsdelivr.net/gh/felix2027/my_tools@main/config/proxy_config.ini
 ```
 ## 图床
