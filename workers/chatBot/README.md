@@ -6,7 +6,7 @@
 |D1 database|nfd|nfd|
 |KV namespace|FRAUD_LIST|FRAUD_LIST|
 ## 必要步骤
-初次部署后需要通过打开https://xxx.workers.dev/registerWebhook来注册websoket
+初次部署后需要通过打开https://xxx.workers.dev/registerWebhook 来注册websoket
 ## Thanks
 - https://github.com/LloydAsp/nfd
 - https://github.com/cvzi/telegram-bot-cloudflare
