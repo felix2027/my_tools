@@ -4,7 +4,8 @@
 > - https://github.com/blackmatrix7/ios_rule_script
 ``` sh
 https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config.ini
-
+```
+``` sh
 https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config_online.ini
 
 ```
@@ -12,7 +13,8 @@ https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config_on
 jsdelivr 加速
 ``` sh
 https://cdn.jsdelivr.net/gh/felix2027/my_tools@main/config/proxy_config.ini
-
+```
+``` sh
 https://cdn.jsdelivr.net/gh/felix2027/my_tools@main/config/proxy_config_online.ini
 ``` 
 
