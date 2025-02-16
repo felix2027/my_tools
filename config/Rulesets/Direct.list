@@ -1,6 +1,3 @@
-Direct,[]GEOIP,LAN
-Direct,[]GEOIP,CN
-
 #airdroid
 DOMAIN-SUFFIX,airdroid.com,DIRECT
 
