@@ -18,7 +18,13 @@ DOMAIN-SUFFIX,sentry.io
 DOMAIN-SUFFIX,stripe.com
 
 #gemini
+DOMAIN-SUFFIX,google.com
+DOMAIN-SUFFIX,googleapis.com
 DOMAIN,gemini.google.com
+DOMAIN,bard.google.com
+DOMAIN-SUFFIX,ai.com
+DOMAIN-SUFFIX,generativelanguage.googleapis.com
+DOMAIN-SUFFIX,google.dev
 
 #claude
 DOMAIN-SUFFIX,anthropic.com
