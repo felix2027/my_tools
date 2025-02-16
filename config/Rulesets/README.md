@@ -7,7 +7,8 @@
   https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/Claude.list
 
 - Apple
-
+  
+  https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/Apple.list
   
 
 - Bahamut
