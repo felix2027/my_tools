@@ -9,7 +9,9 @@ https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config.in
 https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config_online.ini
 
 ```
-
+``` sh
+https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config_online.ini
+```
 jsdelivr 加速
 ``` sh
 https://cdn.jsdelivr.net/gh/felix2027/my_tools@main/config/proxy_config.ini
@@ -17,7 +19,9 @@ https://cdn.jsdelivr.net/gh/felix2027/my_tools@main/config/proxy_config.ini
 ``` sh
 https://cdn.jsdelivr.net/gh/felix2027/my_tools@main/config/proxy_config_online.ini
 ``` 
-
+``` sh
+https://cdn.jsdelivr.net/gh/felix2027/my_tools@main//config/proxy_config_online.ini
+```
 
 ## 感谢
 部分规则源自
