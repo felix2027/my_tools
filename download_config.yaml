@@ -13,7 +13,7 @@ folders: #  配置多个文件夹批量备份 (来自不同仓库)
     branch: master
     folder_path: Clash/Ruleset
     file_extension: .list
-    backup_location: ./config/Ruleset/AL4SSR/Clash/Ruleset
+    backup_location: ./config/Ruleset/AL4SSR//Clash_Ruleset
   - github_repo: blackmatrix7/ios_rule_script
     branch: master
     folder_path: Clash/Ruleset
