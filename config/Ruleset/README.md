@@ -57,8 +57,6 @@
 
   https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/GoogleFCM.list
 
-  https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Apple.list
-
   https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Telegram.list
 
   https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ProxyGFWlist.list
