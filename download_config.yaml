@@ -19,21 +19,21 @@ files:
     download_location: ./config/Ruleset/
   - filename: ChinaMedia.list
     url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaMedia.list
-    download_location: ./config/Ruleset/
+    download_location: ./config/Ruleset/cn/
   - filename: Download.list
     url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Download.list
-    download_location: ./config/Ruleset/
+    download_location: ./config/Ruleset/cn/
   - filename: ChinaCompanyIp.list
     url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaCompanyIp.list
-    download_location: ./config/Ruleset/
+    download_location: ./config/Ruleset/cn/
   - filename: ChinaDomain.list
     url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaDomain.list
-    download_location: ./config/Ruleset/
-  - filename: NetEaseMusic.list
-    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/NetEaseMusic.list
-    download_location: ./config/Ruleset/
+    download_location: ./config/Ruleset/cn/
   - filename: ChinaIp.list
     url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaIp.list
+    download_location: ./config/Ruleset/cn/
+  - filename: NetEaseMusic.list
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/NetEaseMusic.list
     download_location: ./config/Ruleset/
   - filename: Epic.list
     url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/Epic.list
