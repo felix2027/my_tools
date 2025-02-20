@@ -2,7 +2,7 @@ name: Download Files from Config
 
 on:
   workflow_dispatch:
-  schedule:
+  schedule:    #  <--  修正缩进，  与 workflow_dispatch 对齐
     - cron: '0 0 * * *'
 
 permissions:
@@ -136,36 +136,7 @@ jobs:
 
 
           else:
-              print('No valid download configuration found in download_config.yaml. Please define either \"files\" section or \"folders\" section.')
-              exit(1)
-
-
-          if files_to_download: #  执行文件下载和备份 (与之前相同， 无需修改)
-              print(f'Found {len(files_to_download)} files to download:')
-              for file_config in files_to_download:
-                  filename = file_config['filename']
-                  url = file_config['url']
-                  download_location = file_config['download_location']
-
-                  os.makedirs(download_location, exist_ok=True)
-                  download_path = os.path.join(download_location, filename)
-
-                  print(f'Downloading {filename} from {url} to {download_path}')
-                  try:
-                      headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'}
-                      req = urllib.request.Request(url, headers=headers)
-                      with urllib.request.urlopen(req) as response:
-                          content = response.read()
-                          with open(download_path, 'wb') as f:
-                              f.write(content)
-                      print(f'Downloaded {filename} successfully to {download_path}')
-                      print(f'File exists at: {download_path}')
-                      print(f'Contents of download_location: {os.listdir(download_location)}')
-                  except Exception as e:
-                      print(f'Error downloading {filename} from {url}: {e}')
-          else:
               print('No files to download based on the configuration.')
-
           "
           
       - name: Commit files
