@@ -1,7 +1,7 @@
 files:
-  - filename: xsus
-    url: http://106.75.143.245:3390/api/v1/client/subscribe?token=46df0e5a0b59a78ab3102339d9245f24
-    download_location: ./
+#  - filename: example.txt
+#    url: https://www.example.com/a.txt
+#    download_location: ./bakcup/
 
 folders: #  配置多个文件夹批量备份 (来自不同仓库)
   - github_repo: ACL4SSR/ACL4SSR
@@ -18,7 +18,7 @@ folders: #  配置多个文件夹批量备份 (来自不同仓库)
     branch: master
     folder_path: Clash/Ruleset
     file_extension: .list
-    backup_location: ./config/Ruleset/AL4SSR/Clash/Ruleset
+    backup_location: ./config/Ruleset/blackmatrix7/Clash/Ruleset
     recursive: true             #  启用递归备份
     recursion_depth: 2         #  <--  配置 recursion_depth: -1 或 unlimited  表示无限制递归 (可选，  recursive: true 时默认无限层级)
     #  或者不配置 recursion_depth 参数，  效果相同，  无限层级递归
