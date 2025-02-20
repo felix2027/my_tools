@@ -23,7 +23,8 @@ https://cdn.jsdelivr.net/gh/felix2027/my_tools@main/config/proxy_config_online.i
 https://cdn.jsdelivr.net/gh/felix2027/my_tools@main//config/proxy_config_online.ini
 ```
 
-## 感谢
-部分规则源自
+## 感谢/引用
+
 [blackmatrix7](https://github.com/blackmatrix7/ios_rule_script/)
+
 [ACL4SSR](https://github.com/ACL4SSR/ACL4SSR)
