@@ -1,9 +1,9 @@
 name: Download Files from Config
 
 on:
-  workflow_dispatch:
-  schedule:    #  <--  修正缩进，  与 workflow_dispatch 对齐
-    - cron: '0 0 * * *'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
 
 permissions:
   contents: write
