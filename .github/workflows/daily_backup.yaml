@@ -36,10 +36,10 @@ jobs:
 
           files_to_download = [] #  用于存放最终的文件下载配置列表
 
-          default_branch = config.get('branch') #  从顶层配置中获取默认分支 (新增)
+          default_branch = config.get('branch') #  从顶层配置中获取默认分支
 
 
-          #  ---  处理单个文件下载配置 (files 列表)  ---
+          #  ---  处理单个文件下载配置 (files 列表)  --- (与之前相同， 无需修改)
           if 'files' in config and isinstance(config['files'], list):
               print('Using individual file download configuration from \"files\" section.')
               files_config = config['files']
@@ -58,7 +58,7 @@ jobs:
                       print(f'Warning: Incomplete file configuration found in \"files\" section. Skipping: {file_config}')
 
 
-          #  ---  处理批量文件夹下载配置 (folders 列表)
+          #  ---  处理批量文件夹下载配置 (folders 列表)  --- (修改部分)
           if 'folders' in config and isinstance(config['folders'], list):
               print('Using folder-based batch download configuration from \"folders\" section.')
               folders_config = config['folders']
@@ -67,30 +67,70 @@ jobs:
                   folder_path = folder_config.get('folder_path')
                   file_extension = folder_config.get('file_extension')
                   backup_location = folder_config.get('backup_location')
-                  branch = folder_config.get('branch') or default_branch #  从文件夹配置中获取 branch，  如果不存在则使用默认分支 (修改点!)
+                  branch = folder_config.get('branch') or default_branch
+                  recursive = folder_config.get('recursive', False)
+                  recursion_depth = folder_config.get('recursion_depth') #  从文件夹配置中获取 recursion_depth 参数 (新增!)
 
                   if github_repo and folder_path and file_extension and backup_location:
-                      api_url = f'https://api.github.com/repos/{github_repo}/contents/{folder_path}?ref={branch}' #  构建 GitHub API URL，  包含 branch 参数 (修改点!)
+                      if recursive: #  如果 recursive 为 True，  执行递归备份 (修改部分!)
+                          print(f'Performing recursive backup for folder \"{folder_path}\" in repository \"{github_repo}\", branch \"{branch}\"")
+                          repo_base_url = f'https://raw.githubusercontent.com/{github_repo}/{branch}'
 
-                      try:
-                          response = requests.get(api_url)
-                          response.raise_for_status()
-                          files_data = response.json()
-                      except requests.exceptions.RequestException as e:
-                          print(f'Error fetching file list from GitHub API for folder \"{folder_path}\" in repository \"{github_repo}\", branch \"{branch}\": {e}') # 错误信息中包含分支名
-                          continue
+                          max_depth = -1 # 默认无限递归
+                          if recursion_depth is not None: # 如果配置了 recursion_depth
+                              try:
+                                  max_depth = int(recursion_depth) # 尝试转换为整数
+                                  if max_depth < 0: #  如果配置了负数或unlimited，  视为无限递归
+                                      max_depth = -1
+                                  else:
+                                      print(f'Recursion depth limited to {max_depth} levels for folder \"{folder_path}\"') # 提示限制层数
+                              except ValueError:
+                                  print(f'Warning: Invalid recursion_depth value \"{recursion_depth}\" for folder \"{folder_path}\". Ignoring recursion_depth limit.') # 警告无效值，  忽略限制
 
-                      for file_info in files_data:
-                          if file_info['type'] == 'file' and file_info['name'].endswith(file_extension):
-                              filename = file_info['name']
-                              download_url = file_info['download_url']
-                              backup_filepath = os.path.join(backup_location, filename)
 
-                              files_to_download.append({
-                                  'filename': filename,
-                                  'url': download_url,
-                                  'download_location': backup_location
-                              })
+                          for root, dirs, files in os.walk(folder_path): # 使用 os.walk 递归遍历文件夹
+                              current_depth = root[len(folder_path.rstrip(os.path.sep)) + 1:].count(os.path.sep) if root != folder_path else 0 # 计算当前深度 (相对于 folder_path)
+
+                              if max_depth != -1 and current_depth >= max_depth: # 检查是否超过最大深度 (修改点!)
+                                  print(f'Recursion depth limit reached at depth {current_depth} for folder \"{folder_path}\". Skipping subdirectories in \"{root}\".') # 提示跳过子目录
+                                  dirs[:] = [] #  阻止 os.walk 进一步递归到子目录 (关键修改!)
+                                  continue #  跳过当前目录的文件处理，  直接进入下一个目录 (实际上由于 dirs[:] = []，  已经没有下一个目录了)
+
+
+                              for filename in files:
+                                  if filename.endswith(file_extension):
+                                      filepath_relative_to_folder = os.path.relpath(os.path.join(root, filename), folder_path)
+                                      download_url = f'{repo_base_url}/{folder_path}/{filepath_relative_to_folder}'
+                                      backup_filepath = os.path.join(backup_location, filepath_relative_to_folder)
+
+                                      files_to_download.append({
+                                          'filename': filepath_relative_to_folder,
+                                          'url': download_url,
+                                          'download_location': backup_location
+                                      })
+
+                      else: #  如果 recursive 为 False 或未配置，  执行非递归备份 (与之前相同)
+                          api_url = f'https://api.github.com/repos/{github_repo}/contents/{folder_path}?ref={branch}'
+
+                          try:
+                              response = requests.get(api_url)
+                              response.raise_for_status()
+                              files_data = response.json()
+                          except requests.exceptions.RequestException as e:
+                              print(f'Error fetching file list from GitHub API for folder \"{folder_path}\" in repository \"{github_repo}\", branch \"{branch}\": {e}')
+                              continue
+
+                          for file_info in files_data:
+                              if file_info['type'] == 'file' and file_info['name'].endswith(file_extension):
+                                  filename = file_info['name']
+                                  download_url = file_info['download_url']
+                                  backup_filepath = os.path.join(backup_location, filename)
+
+                                  files_to_download.append({
+                                      'filename': filename,
+                                      'url': download_url,
+                                      'download_location': backup_location
+                                  })
                   else:
                       print(f'Warning: Incomplete folder configuration found in \"folders\" section. Skipping: {folder_config}')
 
@@ -127,7 +167,7 @@ jobs:
               print('No files to download based on the configuration.')
 
           "
-
+          
       - name: Commit files
         run: |
           git config --local user.email "actions@github.com"
