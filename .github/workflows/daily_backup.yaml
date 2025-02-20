@@ -1,4 +1,27 @@
-- name: Read config and download files
+name: Download Files from Config
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  download_files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PyYAML and requests
+        run: |
+          pip install pyyaml
+          pip install requests
+
+      - name: Read config and download files
         run: |
           python -c "
           import yaml
@@ -13,10 +36,12 @@
 
           files_to_download = [] #  用于存放最终的文件下载配置列表
 
+          default_branch = config.get('branch') #  从顶层配置中获取默认分支 (新增)
 
-          #  ---  处理单个文件下载配置 (files 列表)  --- (与之前相同， 无需修改)
+
+          #  ---  处理单个文件下载配置 (files 列表)  ---
           if 'files' in config and isinstance(config['files'], list):
-              print('Using individual file download configuration from "files" section.')
+              print('Using individual file download configuration from \"files\" section.')
               files_config = config['files']
               for file_config in files_config:
                   filename = file_config.get('filename')
@@ -30,47 +55,49 @@
                           'download_location': download_location
                       })
                   else:
-                      print(f'Warning: Incomplete file configuration found in "files" section. Skipping: {file_config}')
+                      print(f'Warning: Incomplete file configuration found in \"files\" section. Skipping: {file_config}')
 
 
-          #  ---  处理批量文件夹下载配置 (folders 列表)  --- (新增代码块)
-          if 'folders' in config and isinstance(config['folders'], list): #  检查是否存在 folders 列表配置
-              print('Using folder-based batch download configuration from "folders" section.') # 提示使用 folders 列表配置
-              folders_config = config['folders'] #  获取 folders 列表配置
+          #  ---  处理批量文件夹下载配置 (folders 列表)
+          if 'folders' in config and isinstance(config['folders'], list):
+              print('Using folder-based batch download configuration from \"folders\" section.')
+              folders_config = config['folders']
               for folder_config in folders_config: #  遍历 folders 列表
-                  github_repo = config.get('github_repo') #  仓库名 (从顶层配置中获取，假设所有文件夹都在同一个仓库)
-                  folder_path = folder_config.get('folder_path') #  要备份的文件夹路径 (从当前文件夹配置中获取)
-                  file_extension = folder_config.get('file_extension') #  要备份的文件扩展名 (从当前文件夹配置中获取)
-                  backup_location = folder_config.get('backup_location') #  备份文件存放目录 (从当前文件夹配置中获取)
+                  github_repo = folder_config.get('github_repo')
+                  folder_path = folder_config.get('folder_path')
+                  file_extension = folder_config.get('file_extension')
+                  backup_location = folder_config.get('backup_location')
+                  branch = folder_config.get('branch') or default_branch #  从文件夹配置中获取 branch，  如果不存在则使用默认分支 (修改点!)
 
-                  if folder_path and file_extension and backup_location: # 检查文件夹配置是否完整
-                      api_url = f'https://api.github.com/repos/{github_repo}/contents/{folder_path}' #  构建 GitHub API URL
+                  if github_repo and folder_path and file_extension and backup_location:
+                      api_url = f'https://api.github.com/repos/{github_repo}/contents/{folder_path}?ref={branch}' #  构建 GitHub API URL，  包含 branch 参数 (修改点!)
 
                       try:
-                          response = requests.get(api_url) #  获取文件列表
+                          response = requests.get(api_url)
                           response.raise_for_status()
                           files_data = response.json()
                       except requests.exceptions.RequestException as e:
-                          print(f'Error fetching file list from GitHub API for folder "{folder_path}": {e}')
-                          continue #  如果获取文件列表失败，  跳过当前文件夹，  继续处理下一个文件夹
+                          print(f'Error fetching file list from GitHub API for folder \"{folder_path}\" in repository \"{github_repo}\", branch \"{branch}\": {e}') # 错误信息中包含分支名
+                          continue
 
-                      for file_info in files_data: #  遍历文件列表，  生成下载配置
+                      for file_info in files_data:
                           if file_info['type'] == 'file' and file_info['name'].endswith(file_extension):
                               filename = file_info['name']
                               download_url = file_info['download_url']
                               backup_filepath = os.path.join(backup_location, filename)
 
-                              files_to_download.append({ #  添加到下载列表
+                              files_to_download.append({
                                   'filename': filename,
                                   'url': download_url,
                                   'download_location': backup_location
                               })
                   else:
-                      print(f'Warning: Incomplete folder configuration found in "folders" section. Skipping: {folder_config}') # 提示文件夹配置不完整
+                      print(f'Warning: Incomplete folder configuration found in \"folders\" section. Skipping: {folder_config}')
 
-          else: #  如果 files 列表和 folders 列表都不存在
-              print('No valid download configuration found in download_config.yaml. Please define either "files" section or "folders" section.') # 提示配置错误
-              exit(1) # 退出 workflow
+
+          else:
+              print('No valid download configuration found in download_config.yaml. Please define either \"files\" section or \"folders\" section.')
+              exit(1)
 
 
           if files_to_download: #  执行文件下载和备份 (与之前相同， 无需修改)
@@ -97,6 +124,14 @@
                   except Exception as e:
                       print(f'Error downloading {filename} from {url}: {e}')
           else:
-              print('No files to download based on the configuration.') # 提示没有文件需要下载
+              print('No files to download based on the configuration.')
 
           "
+
+      - name: Commit files
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add --force .
+          git commit -m "Daily update"
+          git push
