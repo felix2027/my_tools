@@ -1,0 +1,66 @@
+name: Backup Files from Config
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  download_files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Read config and download files
+        run: |
+          python -c "
+          import yaml
+          import os
+          import urllib.request
+
+          config_file = 'download_config.yaml'
+
+          with open(config_file, 'r') as f:
+              config = yaml.safe_load(f)
+
+          if 'files' in config:
+              for file_config in config['files']:
+                  filename = file_config['filename']
+                  url = file_config['url']
+                  download_location = file_config['download_location']
+
+                  os.makedirs(download_location, exist_ok=True)
+                  download_path = os.path.join(download_location, filename)
+
+                  print(f'Downloading {filename} from {url} to {download_path}')
+                  try:
+                      urllib.request.urlretrieve(url, download_path)
+                      print(f'Downloaded {filename} successfully to {download_path}')
+                  except Exception as e:
+                      print(f'Error downloading {filename} from {url}: {e}')
+          else:
+              print('No files configuration found in download_config.yaml')
+          "
+
+      - name: Commit files
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add .
+          git commit -m "Add downloaded files" -a
+
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.8.0 #  修改为 @v0.8.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
