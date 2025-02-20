@@ -1,43 +1,81 @@
-name: Backup Files from Config
-
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *'
-
-permissions:
-  contents: write
-  
-jobs:
-  download_files:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Install PyYAML
-        run: pip install pyyaml
-
-      - name: Read config and download files
+- name: Read config and download files
         run: |
           python -c "
           import yaml
           import os
           import urllib.request
+          import requests
 
           config_file = 'download_config.yaml'
 
           with open(config_file, 'r') as f:
               config = yaml.safe_load(f)
 
-          if 'files' in config:
-              for file_config in config['files']:
+          files_to_download = [] #  用于存放最终的文件下载配置列表
+
+
+          #  ---  处理单个文件下载配置 (files 列表)  --- (与之前相同， 无需修改)
+          if 'files' in config and isinstance(config['files'], list):
+              print('Using individual file download configuration from "files" section.')
+              files_config = config['files']
+              for file_config in files_config:
+                  filename = file_config.get('filename')
+                  url = file_config.get('url')
+                  download_location = file_config.get('download_location')
+
+                  if filename and url and download_location:
+                      files_to_download.append({
+                          'filename': filename,
+                          'url': url,
+                          'download_location': download_location
+                      })
+                  else:
+                      print(f'Warning: Incomplete file configuration found in "files" section. Skipping: {file_config}')
+
+
+          #  ---  处理批量文件夹下载配置 (folders 列表)  --- (新增代码块)
+          if 'folders' in config and isinstance(config['folders'], list): #  检查是否存在 folders 列表配置
+              print('Using folder-based batch download configuration from "folders" section.') # 提示使用 folders 列表配置
+              folders_config = config['folders'] #  获取 folders 列表配置
+              for folder_config in folders_config: #  遍历 folders 列表
+                  github_repo = config.get('github_repo') #  仓库名 (从顶层配置中获取，假设所有文件夹都在同一个仓库)
+                  folder_path = folder_config.get('folder_path') #  要备份的文件夹路径 (从当前文件夹配置中获取)
+                  file_extension = folder_config.get('file_extension') #  要备份的文件扩展名 (从当前文件夹配置中获取)
+                  backup_location = folder_config.get('backup_location') #  备份文件存放目录 (从当前文件夹配置中获取)
+
+                  if folder_path and file_extension and backup_location: # 检查文件夹配置是否完整
+                      api_url = f'https://api.github.com/repos/{github_repo}/contents/{folder_path}' #  构建 GitHub API URL
+
+                      try:
+                          response = requests.get(api_url) #  获取文件列表
+                          response.raise_for_status()
+                          files_data = response.json()
+                      except requests.exceptions.RequestException as e:
+                          print(f'Error fetching file list from GitHub API for folder "{folder_path}": {e}')
+                          continue #  如果获取文件列表失败，  跳过当前文件夹，  继续处理下一个文件夹
+
+                      for file_info in files_data: #  遍历文件列表，  生成下载配置
+                          if file_info['type'] == 'file' and file_info['name'].endswith(file_extension):
+                              filename = file_info['name']
+                              download_url = file_info['download_url']
+                              backup_filepath = os.path.join(backup_location, filename)
+
+                              files_to_download.append({ #  添加到下载列表
+                                  'filename': filename,
+                                  'url': download_url,
+                                  'download_location': backup_location
+                              })
+                  else:
+                      print(f'Warning: Incomplete folder configuration found in "folders" section. Skipping: {folder_config}') # 提示文件夹配置不完整
+
+          else: #  如果 files 列表和 folders 列表都不存在
+              print('No valid download configuration found in download_config.yaml. Please define either "files" section or "folders" section.') # 提示配置错误
+              exit(1) # 退出 workflow
+
+
+          if files_to_download: #  执行文件下载和备份 (与之前相同， 无需修改)
+              print(f'Found {len(files_to_download)} files to download:')
+              for file_config in files_to_download:
                   filename = file_config['filename']
                   url = file_config['url']
                   download_location = file_config['download_location']
@@ -47,23 +85,18 @@ jobs:
 
                   print(f'Downloading {filename} from {url} to {download_path}')
                   try:
-                      urllib.request.urlretrieve(url, download_path)
+                      headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'}
+                      req = urllib.request.Request(url, headers=headers)
+                      with urllib.request.urlopen(req) as response:
+                          content = response.read()
+                          with open(download_path, 'wb') as f:
+                              f.write(content)
                       print(f'Downloaded {filename} successfully to {download_path}')
+                      print(f'File exists at: {download_path}')
+                      print(f'Contents of download_location: {os.listdir(download_location)}')
                   except Exception as e:
                       print(f'Error downloading {filename} from {url}: {e}')
           else:
-              print('No files configuration found in download_config.yaml')
+              print('No files to download based on the configuration.') # 提示没有文件需要下载
+
           "
-
-      - name: Commit files
-        run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Actions"
-          git add .
-          git commit -m "Daily update" -a
-
-      - name: Push changes
-        uses: ad-m/github-push-action@v0.8.0 #  修改为 @v0.8.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
