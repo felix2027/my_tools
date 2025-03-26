@@ -9,7 +9,7 @@
 * **前端/后端地址:** [https://convert.2002333.xyz/](https://convert.2002333.xyz/)
   * **项目地址:** [https://github.com/felix2027/sub-convert](https://github.com/felix2027/sub-convert) (forked from [https://github.com/jwyGithub/sub-convert](https://github.com/jwyGithub/sub-convert))
 
-* **后端地址:** [https://sub.2002333.xyz/](https://sub.2002333.xyz/)
+* **后端地址:** [https://sub.2002333.xyz/](https://sub.2002333.xyz/version)
   * **项目地址:** [https://github.com/felix2027/subconverter](https://github.com/felix2027/subconverter) (forked from [https://github.com/tindy2013/subconverter](https://github.com/tindy2013/subconverter))
 
 ### 临时邮箱
