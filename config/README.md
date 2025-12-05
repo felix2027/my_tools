@@ -12,6 +12,10 @@ https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config_mi
 ``` sh
 https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config_next.ini
 ```
+``` sh
+https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config_relay.ini
+```
+
 jsdelivr 加速
 ``` sh
 https://cdn.jsdelivr.net/gh/felix2027/my_tools@main/config/proxy_config.ini
