@@ -6,9 +6,10 @@ export default {
                      request.headers.get("X-Forwarded-For") || 
                      "Unknown";
     
-    // Get current time
+    // Get current time (use visitor's timezone if available, otherwise default to Asia/Shanghai)
     const now = new Date();
-    const timeString = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    const timezone = cf.timezone || 'Asia/Shanghai';
+    const timeString = now.toLocaleString('zh-CN', { timeZone: timezone });
     
     // Greetings in different languages
     const greetings = [
@@ -233,7 +234,7 @@ export default {
               </div>
 
               <div class="footer">
-                  <p>Powered by Cloudflare Workers | <a href="https://github.com/felix2027/my_tools" target="_blank">View on GitHub</a></p>
+                  <p>Powered by Cloudflare Workers | <a href="https://github.com/felix2027/my_tools" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
               </div>
           </div>
       </body>

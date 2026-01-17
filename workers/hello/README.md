@@ -70,7 +70,7 @@ wrangler deploy
 
 ## 许可证 (License)
 
-MIT License - 详见仓库根目录的 LICENSE 文件
+MIT License - 详见项目主 README 文件
 
 ## 贡献 (Contributing)
 
