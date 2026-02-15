@@ -1,12 +1,10 @@
-# 内容：OneDrive
-# 数量：19条
+# OneDrive
 PROCESS-NAME,OneDrive
 PROCESS-NAME,OneDriveUpdater
 DOMAIN-KEYWORD,1drv
 DOMAIN-KEYWORD,onedrive
 DOMAIN-KEYWORD,skydrive
 DOMAIN-SUFFIX,livefilestore.com
-DOMAIN-SUFFIX,microsoftpersonalcontent.com
 DOMAIN-SUFFIX,oneclient.sfx.ms
 DOMAIN-SUFFIX,onedrive.com
 DOMAIN-SUFFIX,onedrive.live.com
@@ -17,3 +15,5 @@ DOMAIN-SUFFIX,skydrive.wns.windows.com
 DOMAIN-SUFFIX,spoprod-a.akamaihd.net
 DOMAIN-SUFFIX,storage.live.com
 DOMAIN-SUFFIX,storage.msn.com
+#DOMAIN-SUFFIX,aria.microsoft.com
+DOMAIN-SUFFIX,microsoftpersonalcontent.com
