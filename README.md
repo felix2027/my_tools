@@ -1,41 +1,43 @@
-# 工具集
+# Tool Collection
 
-这是一个收集了我个人常用的工具的集合
+A collection of tools that I personally use on a regular basis.
+
 <!--
-## 工具列表
+## Tools
 
-### 订阅转换前端/后端
+### Subscription Converter (Frontend / Backend)
 
-* **前端/后端地址:** [https://convert.2002333.xyz/](https://convert.2002333.xyz/)
-  * **项目地址:** [https://github.com/felix2027/sub-convert](https://github.com/felix2027/sub-convert) (forked from [https://github.com/jwyGithub/sub-convert](https://github.com/jwyGithub/sub-convert))
+- **Frontend / Backend:** [https://convert.2002333.xyz/](https://convert.2002333.xyz/)
+  - **Project Repository:** [https://github.com/felix2027/sub-convert](https://github.com/felix2027/sub-convert) (forked from [jwyGithub/sub-convert](https://github.com/jwyGithub/sub-convert))
 
-* **后端地址:** [https://sub.2002333.xyz/](https://sub.2002333.xyz/version)
-  * **项目地址:** [https://github.com/felix2027/subconverter](https://github.com/felix2027/subconverter) (forked from [https://github.com/tindy2013/subconverter](https://github.com/tindy2013/subconverter))
+- **Backend:** [https://sub.2002333.xyz/](https://sub.2002333.xyz/version)
+  - **Project Repository:** [https://github.com/felix2027/subconverter](https://github.com/felix2027/subconverter) (forked from [tindy2013/subconverter](https://github.com/tindy2013/subconverter))
 
-### 临时邮箱
+### Temporary Email
 
-* **描述:** 提供临时的、可丢弃的邮箱地址，用于注册临时账户或接收验证邮件，保护您的主邮箱免受垃圾邮件侵扰。
-* **邮箱地址:** [https://2002333.xyz/](https://2002333.xyz/)
-* **项目地址:** [https://github.com/felix2027/cloudflare_temp_email](https://github.com/felix2027/cloudflare_temp_email) (forked from [https://github.com/dreamhunter2333/cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email))
+- **Description:** Provides temporary, disposable email addresses for registering temporary accounts or receiving verification emails, helping protect your primary email address from spam.
+- **Service:** [https://2002333.xyz/](https://2002333.xyz/)
+- **Project Repository:** [https://github.com/felix2027/cloudflare_temp_email](https://github.com/felix2027/cloudflare_temp_email) (forked from [dreamhunter2333/cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email))
 -->
-## 免责声明
 
-**请仔细阅读本声明。一旦您查看、使用或复制本项目的任何内容，即视为您已接受本免责声明。**
+## Disclaimer
 
-本项目包含的部分内容来源于互联网，仅供资源共享和学习研究之用，不对其合法性、准确性、完整性和有效性做出任何保证。请用户根据具体情况自行判断其适用性。
+**Please read this disclaimer carefully. By viewing, using, or copying any content in this project, you acknowledge that you have read and accepted this disclaimer.**
 
-任何间接使用本项目脚本的用户，包括但不限于搭建VPS或在某些行为违反您所在国家/地区的法律或相关网络安全法规的情况下进行传播，本项目对于由此引起的任何隐私泄漏或其他后果概不负责。用户应自行承担因使用本项目内容而产生的一切法律责任。
+Some content in this project is sourced from the Internet and is provided solely for resource sharing, educational, and research purposes. No guarantees are made regarding the legality, accuracy, completeness, or validity of the content. Users are responsible for independently evaluating its suitability for their intended use.
 
-请勿将本项目的任何内容用于商业或非法目的，否则后果自负。用户应自行承担因用于商业或非法目的而产生的一切后果。
+The project maintainers assume no responsibility for privacy breaches or other consequences arising from the indirect use of scripts provided by this project. This includes, but is not limited to, deploying them on VPS servers or distributing them in circumstances where such activities may violate the laws or applicable cybersecurity regulations of the user's country or region. Users bear sole responsibility for all legal liabilities arising from their use of this project's content.
 
-若任何单位或个人认为本项目的脚本可能侵犯其权利，应及时通知并提供身份证明、所有权证明，我们将在收到认证文件后删除相关内容。
+The content of this project must not be used for commercial or illegal purposes. Users assume full responsibility for any consequences arising from such use.
 
-本项目提供的脚本仅供学习交流，不提供任何形式的技术支持，用户需自行解决使用过程中遇到的问题，包括但不限于由任何脚本错误导致的任何损失或损害。
+If any individual or organization believes that any script in this project may infringe upon their rights, they should promptly notify us and provide relevant identification and proof of ownership. We will remove the relevant content upon receiving the required verification documents.
 
-建议用户在下载后的24小时内从计算机或手机中完全删除以上内容。
+The scripts provided by this project are intended solely for educational and informational purposes. No technical support of any kind is provided. Users are responsible for resolving any issues encountered during use, including, but not limited to, losses or damages caused by script errors.
 
-保留随时更改或补充此免责声明的权利。
+Users are advised to completely delete all of the above content from their computers or mobile devices within 24 hours of downloading it.
 
-## 许可证
+We reserve the right to modify or supplement this disclaimer at any time.
+
+## License
 
 [MIT License](https://opensource.org/license/mit)
