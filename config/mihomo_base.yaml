@@ -48,15 +48,20 @@ dns:
     - tls://9.9.9.9
     - tls://223.5.5.5
 
-  # 节点域名独立解析，避免建立代理与解析代理域名相互依赖。
+  # 代理节点域名解析。
+  # 三家并发竞争响应，不是顺序主备。
+  # 直接连接 DNS，避免节点解析依赖代理自身。
   proxy-server-nameserver:
     - 'tls://223.5.5.5#DIRECT'
+    - 'tls://1.1.1.1#DIRECT'
+    - 'tls://9.9.9.9#DIRECT&name-cert-verify=dns.quad9.net'
 
-  # 直连域名独立解析。
-  # 保留代理失效时 B站 DIRECT 的解析路径。
-  # 不添加普通 UDP DNS 兜底。
+  # 直连出口域名解析。
+  # 即使 Main 的代理不可用，也保留独立的解析路径。
   direct-nameserver:
     - 'tls://223.5.5.5#DIRECT'
+    - 'tls://1.1.1.1#DIRECT'
+    - 'tls://9.9.9.9#DIRECT&name-cert-verify=dns.quad9.net'
   direct-nameserver-follow-policy: false
 
   # 主要查询通过 Main。
