@@ -1,0 +1,77 @@
+# Mihomo 订阅转换基础模板
+# 节点、分组、规则由 subconverter 写入。
+# 代理端口、TUN、系统代理、IPv6 路由和系统 DNS 接管由客户端管理。
+# 对 OpenClash 等会覆写配置的客户端，应检查最终运行 YAML。
+
+mode: rule
+log-level: warning
+
+# 避免 unified-delay 让一次 URLTest 再发送第二次 HEAD。
+unified-delay: false
+
+# 保存各地区当前选择的候选。
+# 节点改名、删除或客户端覆写仍可能使选择失效。
+profile:
+  store-selected: true
+
+dns:
+  enable: true
+
+  # 只监听本机；启动监听不等于系统 DNS 已经接管。
+  # 路由器上的 dnsmasq / OpenClash 转发端口应与此一致。
+  listen: 127.0.0.1:1053
+
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+
+  fake-ip-filter:
+    - '*.lan'
+    - '*.local'
+    - 'localhost'
+
+  use-hosts: true
+  use-system-hosts: true
+
+  # 只控制 Mihomo DNS 的 AAAA 回答，不会阻断操作系统 IPv6。
+  ipv6: false
+  prefer-h3: false
+
+  # 以下通过 #Main / #DIRECT 显式指定 DNS 出口。
+  respect-rules: false
+
+  # 启动解析：取得 DNS 服务域名的 IP。
+  # 保留你指定的三个 IP 型 DoT。
+  # 会竞争响应，并非按顺序备用。
+  # 此路径为加密直连，需要本地网络允许 DoT / TCP 853。
+  default-nameserver:
+    - tls://1.1.1.1
+    - tls://9.9.9.9
+    - tls://223.5.5.5
+
+  # 节点域名独立解析，避免建立代理与解析代理域名相互依赖。
+  proxy-server-nameserver:
+    - 'tls://223.5.5.5#DIRECT'
+
+  # 直连域名独立解析。
+  # 保留代理失效时 B站 DIRECT 的解析路径。
+  # 不添加普通 UDP DNS 兜底。
+  direct-nameserver:
+    - 'tls://223.5.5.5#DIRECT'
+  direct-nameserver-follow-policy: false
+
+  # 主要查询通过 Main。
+  # Main 被手动选为 DIRECT 时，这里也会跟随直连。
+  # 默认启用两家，并发竞争响应，不是顺序主备。
+  nameserver:
+    - 'https://cloudflare-dns.com/dns-query#Main'
+    - 'https://dns.quad9.net/dns-query#Main'
+    - 'https://unfiltered.adguard-dns.com/dns-query#Main'
+    - 'https://doh.sb/dns-query#Main'
+
+# #DIRECT 是内置直连，与 INI 中名为 Direct 的选择组不同。
+# 把 Direct 选为 REJECT，不会禁止上面的加密直连 DNS。
+#
+# 以下三个部分由订阅转换器生成。
+proxies: []
+proxy-groups: []
+rules: []
