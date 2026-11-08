@@ -5,6 +5,7 @@ addEventListener('fetch', event => {
   // 全局安全响应头：允许加载 Google Fonts，允许页面中内联脚本执行
   const defaultHeaders = {
     'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'no-store',
     'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
   };
   
@@ -37,6 +38,40 @@ addEventListener('fetch', event => {
   /**
    * 主请求处理函数，根据请求方法和路径分发
    */
+  class InputError extends Error {}
+
+  async function readInput(request) {
+    let data;
+    try {
+      data = await request.json();
+    } catch {
+      throw new InputError('Invalid JSON');
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new InputError('Expected a JSON object');
+    }
+    if (data.algorithm !== undefined && data.algorithm !== null && data.algorithm !== '' &&
+        data.algorithm !== 'AES-GCM' && data.algorithm !== 'AES-CBC') {
+      throw new InputError('Unsupported algorithm');
+    }
+    parseIterations(data.iterations);
+    return data;
+  }
+
+  function parseIterations(value) {
+    if (value === undefined || value === null || value === '') return 100000;
+    if ((typeof value !== 'number' && typeof value !== 'string') ||
+        (typeof value === 'string' && !/^\d+$/.test(value))) {
+      throw new InputError('Iterations must be a positive integer');
+    }
+    const iterations = Number(value);
+    // Preserve the full WebCrypto range for existing ciphertexts.
+    if (!Number.isInteger(iterations) || iterations < 1 || iterations > 0xffffffff) {
+      throw new InputError('Iterations must be between 1 and 4294967295');
+    }
+    return iterations;
+  }
+
   async function handleRequest(request) {
     const url = new URL(request.url);
   
@@ -64,7 +99,7 @@ addEventListener('fetch', event => {
    */
   async function handleEncrypt(request) {
     try {
-      const data = await request.json();
+      const data = await readInput(request);
       const errMsg = validateEncrypt(data);
       if (errMsg) {
         return new Response(
@@ -82,7 +117,10 @@ addEventListener('fetch', event => {
       const enc = new TextEncoder();
   
       const encodingParam = new URL(request.url).searchParams.get('encoding') || 'base64';
-      const encoding = Encodings[encodingParam] || Encodings['base64'];
+      if (!Object.prototype.hasOwnProperty.call(Encodings, encodingParam)) {
+        throw new InputError('Unsupported encoding');
+      }
+      const encoding = Encodings[encodingParam];
   
       // 算法选择：默认 AES-GCM，也可选 AES-CBC
       const algorithm = data.algorithm || 'AES-GCM';
@@ -92,7 +130,7 @@ addEventListener('fetch', event => {
       // 生成随机 salt（16 字节）
       const salt = crypto.getRandomValues(new Uint8Array(16));
       // 迭代次数：默认 100000（OWASP 推荐值），可通过 JSON 参数指定
-      const iterations = data.iterations ? parseInt(data.iterations) : 100000;
+      const iterations = parseIterations(data.iterations);
       // 派生密钥
       const key = await deriveKey(password, salt, iterations, algorithm);
   
@@ -129,8 +167,8 @@ addEventListener('fetch', event => {
       );
     } catch (err) {
       return new Response(
-        JSON.stringify({ error: err.toString() }),
-        { status: 500, headers: { ...defaultHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: err instanceof InputError ? err.message : "Encryption failed" }),
+        { status: err instanceof InputError || err.name === 'OperationError' ? 400 : 500, headers: { ...defaultHeaders, 'Content-Type': 'application/json' } }
       );
     }
   }
@@ -142,8 +180,9 @@ addEventListener('fetch', event => {
    */
   async function handleDecrypt(request) {
     try {
-      const data = await request.json();
-      if (!data.ciphertext || !data.password || !data.iv || !data.salt) {
+      const data = await readInput(request);
+      if (['ciphertext', 'password', 'iv', 'salt'].some(field =>
+        typeof data[field] !== 'string' || !data[field])) {
         return new Response(
           JSON.stringify({ error: "缺少密文、密码、IV 或 salt" }),
           { status: 400, headers: { ...defaultHeaders, 'Content-Type': 'application/json' } }
@@ -157,10 +196,13 @@ addEventListener('fetch', event => {
       }
   
       const encodingParam = new URL(request.url).searchParams.get('encoding') || 'base64';
-      const encoding = Encodings[encodingParam] || Encodings['base64'];
+      if (!Object.prototype.hasOwnProperty.call(Encodings, encodingParam)) {
+        throw new InputError('Unsupported encoding');
+      }
+      const encoding = Encodings[encodingParam];
   
       const algorithm = data.algorithm || 'AES-GCM';
-      const iterations = data.iterations ? parseInt(data.iterations) : 100000;
+      const iterations = parseIterations(data.iterations);
       const saltBuffer = encoding.decode(data.salt);
       const ivBuffer = encoding.decode(data.iv);
       const ciphertextBuffer = encoding.decode(data.ciphertext);
@@ -193,7 +235,7 @@ addEventListener('fetch', event => {
     } catch (err) {
       return new Response(
         JSON.stringify({ error: "解密失败，请检查密码或数据完整性" }),
-        { status: 500, headers: { ...defaultHeaders, 'Content-Type': 'application/json' } }
+        { status: err instanceof InputError || err.name === 'OperationError' ? 400 : 500, headers: { ...defaultHeaders, 'Content-Type': 'application/json' } }
       );
     }
   }
@@ -228,8 +270,8 @@ addEventListener('fetch', event => {
    * 参数校验：验证加密请求的输入完整性
    */
   function validateEncrypt(data) {
-    if (!data.plaintext || !data.plaintext.trim()) return "明文不能为空";
-    if (!data.password || !data.password.trim()) return "密码不能为空";
+    if (typeof data.plaintext !== 'string' || !data.plaintext.trim()) return "明文不能为空";
+    if (typeof data.password !== 'string' || !data.password.trim()) return "密码不能为空";
     return null;
   }
   
@@ -249,7 +291,12 @@ addEventListener('fetch', event => {
    * 工具函数：Base64 字符串转 ArrayBuffer
    */
   function base64ToArrayBuffer(base64) {
-    const binaryString = atob(base64);
+    let binaryString;
+    try {
+      binaryString = atob(base64);
+    } catch {
+      throw new InputError('Invalid Base64 data');
+    }
     const len = binaryString.length;
     const bytes = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
@@ -271,7 +318,10 @@ addEventListener('fetch', event => {
    * 工具函数：Hex 编码字符串转 ArrayBuffer
    */
   function hexToArrayBuffer(hex) {
-    const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    if (!/^(?:[0-9a-fA-F]{2})*$/.test(hex)) {
+      throw new InputError('Invalid hexadecimal data');
+    }
+    const bytes = new Uint8Array((hex.match(/.{2}/g) || []).map(byte => parseInt(byte, 16)));
     return bytes.buffer;
   }
   

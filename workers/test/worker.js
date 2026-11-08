@@ -36,7 +36,7 @@ export default {
         tlsVersion: cf.tlsVersion,
         tlsCipher: cf.tlsCipher,
         // Bot 管理评分（Cloudflare 可能通过 cf.botManagement 返回）
-        botScore: cf.botManagement?.score || "N/A",
+        botScore: cf.botManagement?.score ?? "N/A",
         // 威胁分数
         threatScore: cf.threatScore,
         // 请求头信息
@@ -47,15 +47,20 @@ export default {
         // 其他字段
         workerLocation: cf.colo || "N/A", // 当前 Worker 所在的 Cloudflare 数据中心
         // Edge Server IP：使用 CF-Ray 头部的第一部分作为边缘服务器 IP
-        edgeServerIP:
-          request.headers.get("CF-Ray")?.split("-")[0] || "N/A"
+        rayId:
+          request.headers.get("CF-Ray") || "N/A"
       };
   
       // 构造表格行的辅助函数
+      const escapeHtml = value => String(value ?? "N/A").replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[char]));
+      const hasCoordinate = value => value !== undefined && value !== null &&
+        String(value).trim() !== '' && Number.isFinite(Number(value));
       const buildRow = (title, value) => `
         <tr>
-          <td>${title}</td>
-          <td>${value ?? "N/A"}</td>
+          <td>${escapeHtml(title)}</td>
+          <td>${escapeHtml(value)}</td>
         </tr>`;
   
       // 构造 HTML 响应内容
@@ -126,10 +131,7 @@ export default {
                     )}
                     ${buildRow(
                       "Coordinates",
-                      (info.latitude &&
-                        info.longitude &&
-                        !isNaN(Number(info.latitude)) &&
-                        !isNaN(Number(info.longitude)))
+                      (hasCoordinate(info.latitude) && hasCoordinate(info.longitude))
                         ? `${Number(info.latitude).toFixed(4)}, ${Number(
                             info.longitude
                           ).toFixed(4)}`
@@ -155,15 +157,15 @@ export default {
                     ${buildRow("Protocol", info.httpProtocol || "N/A")}
                     ${buildRow(
                       "Trust Score",
-                      info.clientTrustScore ? `${info.clientTrustScore}/100` : "N/A"
+                      info.clientTrustScore != null ? `${info.clientTrustScore}/100` : "N/A"
                     )}
                     ${buildRow("TLS Version", info.tlsVersion || "N/A")}
                     ${buildRow("TLS Cipher", info.tlsCipher || "N/A")}
                     ${buildRow("Bot Score", info.botScore)}
-                    ${buildRow("Threat Score", info.threatScore || "N/A")}
+                    ${buildRow("Threat Score", info.threatScore ?? "N/A")}
                     ${buildRow("Cloudflare POP", info.colo || "N/A")}
                     ${buildRow("Worker Location", info.workerLocation)}
-                    ${buildRow("Edge Server IP", info.edgeServerIP)}
+                    ${buildRow("Cloudflare Ray ID", info.rayId)}
                     ${buildRow("Accept-Language", info.acceptLanguage)}
                     ${buildRow("Referer", info.referer)}
                     ${buildRow("Accept-Encoding", info.acceptEncoding)}

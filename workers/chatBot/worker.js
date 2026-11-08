@@ -196,6 +196,17 @@ async function setBotCommands() {
 
 addEventListener('fetch', event => {
   const url = new URL(event.request.url)
+  const adminPaths = ['/registerWebhook', '/unRegisterWebhook', '/setCommands'];
+  if (adminPaths.includes(url.pathname)) {
+    if (!SECRET || event.request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== SECRET) {
+      event.respondWith(new Response('Unauthorized', { status: 403 }));
+      return;
+    }
+    if (event.request.method !== 'POST') {
+      event.respondWith(new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } }));
+      return;
+    }
+  }
   if (url.pathname === WEBHOOK) {
     event.respondWith(handleWebhook(event))
   } else if (url.pathname === '/registerWebhook') {
@@ -211,7 +222,7 @@ addEventListener('fetch', event => {
 
 
 async function handleWebhook(event) {
-  if (event.request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== SECRET) {
+  if (!SECRET || event.request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== SECRET) {
     return new Response('Unauthorized', { status: 403 })
   }
 
@@ -308,44 +319,44 @@ function getUserNickname(userInfo, chatId) {
  *  消息处理主函数，根据消息类型和内容分发到不同的处理函数
  * @param {object} message  Telegram message object
  */
-async function onMessage(message) {
-  const chatId = message.chat.id.toString();
-
-  // 初始化会话状态
-  if (!chatSessions[chatId]) {
-    chatSessions[chatId] = {
-      step: 0,
-      lastInteraction: Date.now()
-    };
-  }
-  const session = chatSessions[chatId];
-  session.lastInteraction = Date.now(); // 更新最后交互时间
-
-  currentChatTarget = await getCurrentChatTarget(); // 获取当前聊天目标
-
-  if (message.reply_to_message) {
-    await handleReplyMessage(message); // 处理回复消息
-  } else if (message.text) {
-    await handleTextMessage(message);   // 处理文本消息
-  } else if (message.photo || message.video || message.document || message.audio) {
-    await handleMediaMessage(message); // 处理媒体消息
-  }
-
-  // 管理员消息处理 (判断是否为管理员消息需要在各种消息类型处理之后，避免普通用户冒充管理员)
-  if (message.chat.id.toString() === ADMIN_UID) {
-    await handleAdminMessage(message); // 处理管理员消息
-    return; // 管理员消息处理完后直接返回，不再进行普通用户消息处理
-  }
-
-  return handleGuestMessage(message); // 处理普通用户消息
+function isAdminMessage(message) {
+  return String(message.chat?.id) === String(ADMIN_UID) &&
+    String(message.from?.id) === String(ADMIN_UID);
 }
 
+async function onMessage(message) {
+  const chatId = message.chat.id.toString();
+  const isAdmin = isAdminMessage(message);
+
+  // Check blocking before commands, replies, or any other side effects.
+  if (!isAdmin && await nfd.get('isblocked-' + chatId, { type: 'json' })) {
+    return sendMessage({ chat_id: chatId, text: '您已被屏蔽' });
+  }
+
+  if (!chatSessions[chatId]) {
+    chatSessions[chatId] = { step: 0, lastInteraction: Date.now() };
+  }
+  chatSessions[chatId].lastInteraction = Date.now();
+
+  // Commands are consumed here, including reply commands; never forward them.
+  if (message.text && await handleTextMessage(message)) return;
+
+  if (isAdmin) {
+    currentChatTarget = await getCurrentChatTarget();
+    return handleAdminMessage(message);
+  }
+  if (message.photo || message.video || message.document || message.audio) {
+    await handleMediaMessage(message);
+  }
+  return handleGuestMessage(message);
+}
 
 /**
  * 处理回复消息
  * @param {object} message Telegram message object
  */
 async function handleReplyMessage(message) {
+  if (!isAdminMessage(message)) return;
   const repliedChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" });
   if (repliedChatId) {
     currentChatTarget = repliedChatId;
@@ -359,6 +370,12 @@ async function handleReplyMessage(message) {
  */
 async function handleTextMessage(message) {
   const text = message.text;
+  const command = text.split(/\s/)[0];
+  const adminCommands = ['/blocklist', '/unblock', '/list', '/fraud', '/unfraud', '/block', '/checkblock'];
+  if (adminCommands.includes(command) && !isAdminMessage(message)) {
+    await sendMessage({ chat_id: message.chat.id, text: '此命令仅限管理员使用。' });
+    return true;
+  }
 
   if (text === '/start') {
     await handleStartCommand(message);
@@ -370,11 +387,11 @@ async function handleTextMessage(message) {
     await handleUnblockCommandByNumber(message);
   } else if (text === '/list') {
     await handleListFraudCommand(message);
-  } else if (text.startsWith('/search')) {
+  } else if (text === '/search' || text.startsWith('/search ')) {
     await handleSearchCommand(message);
-  } else if (text.startsWith('/fraud')) {
+  } else if (text === '/fraud' || text.startsWith('/fraud ')) {
     await handleFraudCommand(message);
-  } else if (text.startsWith('/unfraud')) {
+  } else if (text === '/unfraud' || text.startsWith('/unfraud ')) {
     await handleUnfraudCommand(message);
   } else if (text === '/block') {
     await handleBlockCommand(message);
@@ -382,7 +399,10 @@ async function handleTextMessage(message) {
     await handleUnblockCommand(message);
   } else if (text === '/checkblock') {
     await handleCheckBlockCommand(message);
+  } else {
+    return false;
   }
+  return true;
 }
 
 /**
@@ -439,6 +459,7 @@ async function handleHelpCommand(message) {
  * @param {object} message Telegram message object
  */
 async function handleBlocklistCommand(message) {
+  if (!isAdminMessage(message)) return;
   return listBlockedUsers();
 }
 
@@ -447,6 +468,7 @@ async function handleBlocklistCommand(message) {
  * @param {object} message Telegram message object
  */
 async function handleUnblockCommandByNumber(message) {
+  if (!isAdminMessage(message)) return;
   const index = parseInt(message.text.split(' ')[1], 10);
   if (!isNaN(index)) {
     return unblockByIndex(index);
@@ -463,6 +485,7 @@ async function handleUnblockCommandByNumber(message) {
  * @param {object} message Telegram message object
  */
 async function handleListFraudCommand(message) {
+  if (!isAdminMessage(message)) return;
     // 处理 /list 命令
     const storedList = await FRAUD_LIST.get('localFraudList');
     if (storedList) {
@@ -538,6 +561,7 @@ async function handleSearchCommand(message) {
  * @param {object} message Telegram message object
  */
 async function handleFraudCommand(message) {
+  if (!isAdminMessage(message)) return;
   const parts = message.text.split(' ');
   if (parts.length === 2) {
     const fraudId = parts[1].toString(); // 确保 UID 是字符串类型
@@ -567,6 +591,7 @@ async function handleFraudCommand(message) {
  * @param {object} message Telegram message object
  */
 async function handleUnfraudCommand(message) {
+  if (!isAdminMessage(message)) return;
   const parts = message.text.split(' ');
   if (parts.length === 2) {
     const fraudId = parts[1].toString(); // 确保 UID 是字符串类型
@@ -597,6 +622,7 @@ async function handleUnfraudCommand(message) {
  * @param {object} message Telegram message object
  */
 async function handleBlockCommand(message) {
+  if (!isAdminMessage(message)) return;
   if (message.reply_to_message) {
     return handleBlock(message); // 调用原有的屏蔽处理函数
   } else {
@@ -612,6 +638,7 @@ async function handleBlockCommand(message) {
  * @param {object} message Telegram message object
  */
 async function handleUnblockCommand(message) {
+  if (!isAdminMessage(message)) return;
   if (message.reply_to_message) {
     return handleUnBlock(message); // 回复消息解除屏蔽
   } else {
@@ -627,6 +654,7 @@ async function handleUnblockCommand(message) {
  * @param {object} message Telegram message object
  */
 async function handleCheckBlockCommand(message) {
+  if (!isAdminMessage(message)) return;
   if (message.reply_to_message) {
     return checkBlock(message); // 调用原有的检查屏蔽状态函数
   } else {
@@ -643,6 +671,7 @@ async function handleCheckBlockCommand(message) {
  * @param {object} message Telegram message object
  */
 async function handleAdminMessage(message) {
+  if (!isAdminMessage(message)) return;
   if (message.reply_to_message) {
     await handleAdminReplyMessage(message); // 处理管理员回复消息
   } else {
@@ -656,6 +685,7 @@ async function handleAdminMessage(message) {
  * @param {object} message Telegram message object
  */
 async function handleAdminReplyMessage(message) {
+  if (!isAdminMessage(message)) return;
   let guestChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" });
   if (guestChatId) {
     currentChatTarget = guestChatId;  // 更新当前聊天目标
@@ -683,6 +713,7 @@ async function handleAdminReplyMessage(message) {
  * @param {object} message Telegram message object
  */
 async function handleAdminDirectMessage(message) {
+  if (!isAdminMessage(message)) return;
   if (!currentChatTarget) {
     // 保存消息内容
     pendingMessage = message;
@@ -805,7 +836,10 @@ async function sendAudio(msg) {
  * @param {object} callbackQuery Telegram callbackQuery object
  */
 async function onCallbackQuery(callbackQuery) {
+  if (String(callbackQuery.from?.id) !== String(ADMIN_UID) ||
+      String(callbackQuery.message?.chat?.id) !== String(ADMIN_UID)) return;
   const data = callbackQuery.data;
+  if (typeof data !== 'string') return;
 
   if (data.startsWith('select_')) {
     const selectedChatId = data.split('_')[1];
@@ -946,7 +980,7 @@ async function handleNotify(message) {
       text: `*请注意对方是骗子*！！ \n UID：${chatId}`
     });
   }
-  if (enable_notification) {
+  if (enable_notification && notificationUrl) {
     let lastMsgTime = await nfd.get('lastmsg-' + chatId, { type: "json" });
     if (!lastMsgTime || Date.now() - lastMsgTime > NOTIFY_INTERVAL) {
       await nfd.put('lastmsg-' + chatId, Date.now());
@@ -965,6 +999,7 @@ async function handleNotify(message) {
  * @returns {Promise<Response>}
  */
 async function handleBlock(message) {
+  if (!isAdminMessage(message)) return;
   let guestChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" });
   if (guestChatId === ADMIN_UID) {
     return sendMessage({
@@ -992,6 +1027,7 @@ async function handleBlock(message) {
  * @returns {Promise<Response>}
  */
 async function handleUnBlock(message) {
+  if (!isAdminMessage(message)) return;
   let guestChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" });
   const userInfo = await getUserInfo(guestChatId);
   const nickname = getUserNickname(userInfo, guestChatId);
@@ -1016,6 +1052,7 @@ async function handleUnBlock(message) {
  * @returns {Promise<Response>}
  */
 async function checkBlock(message) {
+  if (!isAdminMessage(message)) return;
   let guestChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" });
   let isBlocked = await nfd.get('isblocked-' + guestChatId, { type: "json" });
   const userInfo = await getUserInfo(guestChatId);
