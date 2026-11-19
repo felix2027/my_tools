@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: rule-backup-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   download_and_commit:
     runs-on: ubuntu-latest
@@ -25,21 +29,37 @@ jobs:
         run: pip install PyYAML requests
 
       - name: Download files based on config
-        run: python download_script.py
+        id: backup
+        run: |
+          status=0
+          python download_script.py || status=$?
+          case "$status" in
+            0) ;;
+            2) echo "partial=true" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
         env:
-          # 使用标准的 GITHUB_TOKEN。如果需要跨仓库访问，请换回您自己的 githubToken 并确保已在 Secrets 中设置
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKUP_PATHS_FILE: ${{ runner.temp }}/backup-paths
 
       - name: Commit and Push if changed
         run: |
+          if [[ ! -s "$RUNNER_TEMP/backup-paths" ]]; then
+            echo "No completed downloads to publish."
+            exit 0
+          fi
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git add --force .
-          # 检查是否有暂存的变更
+          git --literal-pathspecs add --force --pathspec-from-file="$RUNNER_TEMP/backup-paths" --pathspec-file-nul
           if git diff --staged --quiet; then
             echo "No changes to commit, working tree clean."
           else
-            # 使用更详细的 commit 信息
             git commit -m "Daily update: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
             git push
           fi
+
+      - name: Report incomplete backup
+        if: steps.backup.outputs.partial == 'true'
+        run: |
+          echo "::error::Some upstream sources failed. See the download step for skipped sources."
+          exit 1
