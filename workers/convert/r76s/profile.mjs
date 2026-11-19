@@ -1,6 +1,8 @@
 const providerName = 'R76SNodes';
 const templateUrl = 'https://raw.githubusercontent.com/felix2027/my_tools/main/config/proxy_config_next.ini';
 const regions = ['TW', 'SG', 'JP', 'US', 'HK'];
+const privateRoutes = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+  .map(cidr => 'IP-CIDR,' + cidr + ',DIRECT,no-resolve');
 const builtins = ['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS', 'PASS-RULE', 'COMPATIBLE', 'GLOBAL', 'DNS'];
 const requiredGroups = new Map([
   ['Proxies', 'select'], ['Direct', 'select'], ['Final', 'select'], ['Manual', 'select'],
@@ -22,7 +24,19 @@ function memberFilter(names) {
   return '^(?:' + literals.join('|') + ')$';
 }
 
-export function toR76sConfig(config) {
+// The router allocates the mark and installs the routing and firewall rules.
+// 0x162 is already used to send intercepted LAN traffic into the baseline TUN.
+function parseProxyMark(value) {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^(?:[0-9]+|0x[0-9a-f]+)$/i.test(value)) throw new Error('Invalid proxy mark');
+  const mark = Number(value);
+  if (!Number.isSafeInteger(mark) || mark < 1 || mark > 0xffffffff || mark === 0x162) {
+    throw new Error('Invalid proxy mark');
+  }
+  return mark;
+}
+
+export function toR76sConfig(config, proxyMark, probeInterval = 150) {
   const nodes = config?.proxies;
   const groups = config?.['proxy-groups'];
   requireConfig(Array.isArray(nodes) && nodes.length && Array.isArray(groups)
@@ -41,8 +55,17 @@ export function toR76sConfig(config) {
   }
   for (const [name, type] of requiredGroups) requireConfig(byName.get(name)?.type === type);
 
+  // A global or group binding could also steer DIRECT. A node-specific
+  // interface or chained dialer could establish the first hop on another WAN.
+  if (proxyMark !== undefined) {
+    for (const entry of [config, ...groups, ...nodes]) {
+      requireConfig(!entry['interface-name'] && !entry['routing-mark'] && !entry['dialer-proxy']);
+    }
+    requireConfig(nodes.every(node => !['direct', 'dns', 'reject', 'pass'].includes(node.type.toLowerCase())));
+  }
+
   // Provider nodes are no longer top-level outbounds. Validate policy references
-  // before publishing the original, unmodified rule lists.
+  // before publishing the original business rules.
   const subRules = config['sub-rules'] ?? {};
   for (const rules of [config.rules, ...Object.values(subRules)]) {
     requireConfig(Array.isArray(rules));
@@ -100,11 +123,15 @@ export function toR76sConfig(config) {
       payload: nodes,
       'health-check': {
         enable: true, url: 'https://www.gstatic.com/generate_204',
-        interval: 150, timeout: 5000, lazy: false, 'expected-status': '204',
+        interval: probeInterval, timeout: 5000, lazy: false, 'expected-status': '204',
       },
     },
   };
   result['proxy-groups'] = groups.map(convertGroup);
+  if (proxyMark !== undefined) {
+    result['proxy-providers'][providerName].override = { 'routing-mark': proxyMark };
+    result.rules = [...privateRoutes, ...config.rules];
+  }
   return result;
 }
 
@@ -125,9 +152,21 @@ async function serveR76s(url, env, getRestoredConfig, dumpYaml) {
   params.delete('profile');
   params.set('config', templateUrl);
   params.set('new_name', 'true');
+  let proxyMark;
+  try {
+    proxyMark = parseProxyMark(env.R76S_PROXY_ROUTING_MARK);
+  } catch {
+    return fail('Invalid R76S_PROXY_ROUTING_MARK in Worker settings', 500);
+  }
+  const intervalText = env.R76S_PROBE_INTERVAL_SECONDS ?? '150';
+  const probeInterval = Number(intervalText);
+  if (typeof intervalText !== 'string' || !/^[0-9]+$/.test(intervalText)
+    || probeInterval < 1 || probeInterval > 0x7fffffff) {
+    return fail('Invalid R76S_PROBE_INTERVAL_SECONDS in Worker settings', 500);
+  }
   try {
     const config = await getRestoredConfig(new Request(url), env);
-    return new Response(dumpYaml(toR76sConfig(config)), {
+    return new Response(dumpYaml(toR76sConfig(config, proxyMark, probeInterval)), {
       headers: { ...headers, 'Content-Type': 'text/yaml; charset=UTF-8' },
     });
   } catch {

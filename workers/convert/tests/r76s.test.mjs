@@ -113,6 +113,39 @@ test('missing regions explicitly reject until the next subscription adds matchin
   assert.deepEqual(filteredNames(groups.get('Fallback'), ['JP-only']), ['JP-only']);
 });
 
+test('dual WAN marks only provider nodes and returns literal private destinations to system routing', () => {
+  const original = nextConfig();
+  const result = toR76sConfig(structuredClone(original), 1186);
+  const ordinary = toR76sConfig(structuredClone(original));
+  const provider = result['proxy-providers'][providerName];
+  assert.deepEqual(provider.override, { 'routing-mark': 1186 });
+  assert.deepEqual(provider.payload, original.proxies);
+  assert.deepEqual(provider['health-check'], ordinary['proxy-providers'][providerName]['health-check']);
+  assert.deepEqual(result['proxy-groups'], ordinary['proxy-groups']);
+  assert.ok(!('routing-mark' in result) && !('interface-name' in result));
+  assert.deepEqual(result.rules, [
+    'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
+    'IP-CIDR,172.16.0.0/12,DIRECT,no-resolve',
+    'IP-CIDR,192.168.0.0/16,DIRECT,no-resolve',
+    ...original.rules,
+  ]);
+  assert.ok(!('override' in ordinary['proxy-providers'][providerName]));
+  assert.deepEqual(ordinary.rules, original.rules);
+});
+
+test('dual WAN refuses conflicting global, group and upstream node egress settings', () => {
+  for (const entry of [cfg => cfg, cfg => cfg['proxy-groups'][0], cfg => cfg.proxies[0]]) {
+    for (const [key, value] of [['routing-mark', 8], ['interface-name', 'eth0'], ['dialer-proxy', 'Direct']]) {
+      const input = nextConfig();
+      entry(input)[key] = value;
+      assert.throws(() => toR76sConfig(input, 1186));
+    }
+  }
+  const input = nextConfig();
+  input.proxies[0].type = 'direct';
+  assert.throws(() => toR76sConfig(input, 1186));
+});
+
 test('malformed or ambiguous configurations fail instead of returning an incomplete profile', () => {
   const duplicate = nextConfig([node('JP-repeat'), node('JP-repeat')]);
   assert.throws(() => toR76sConfig(duplicate));
@@ -180,12 +213,44 @@ test('Worker applies the opt-in after chunk merge and node restoration', async t
 test('ordinary subscribers still receive the original flat config', async t => {
   const calls = mockBackend(t);
   const worker = await builtWorker;
-  const response = await worker.fetch(request({ config: template }), env, {});
+  const response = await worker.fetch(request({ config: template }), { ...env, R76S_PROXY_ROUTING_MARK: '1186' }, {});
   assert.equal(response.status, 200);
   const text = await response.text();
   assert.equal(calls.length, 2);
   assert.match(text, /^proxies:/m);
   assert.doesNotMatch(text, /^proxy-providers:/m);
+});
+
+test('Worker uses its configured proxy mark and refuses invalid or reserved marks before conversion', async t => {
+  const calls = mockBackend(t);
+  const worker = await builtWorker;
+  for (const mark of ['', '0', '-1', '1.5', '1e3', 'abc', '4294967296', '0x162', '354']) {
+    const response = await worker.fetch(request({ profile: 'r76s' }), { ...env, R76S_PROXY_ROUTING_MARK: mark }, {});
+    assert.equal(response.status, 500, mark);
+  }
+  assert.equal(calls.length, 0);
+  const response = await worker.fetch(request({ profile: 'r76s' }), { ...env, R76S_PROXY_ROUTING_MARK: '0x4a2' }, {});
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /routing-mark: 1186/);
+  assert.match(body, /IP-CIDR,172\.16\.0\.0\/12,DIRECT,no-resolve/);
+  assert.equal(calls.length, 2);
+});
+
+test('Worker can reduce metered probe frequency without starting additional group timers', async t => {
+  const calls = mockBackend(t);
+  const worker = await builtWorker;
+  for (const interval of ['0', '-5', '', '1.5', '2147483648']) {
+    const res = await worker.fetch(request({ profile: 'r76s' }), { ...env, R76S_PROBE_INTERVAL_SECONDS: interval }, {});
+    assert.equal(res.status, 500);
+  }
+  assert.equal(calls.length, 0);
+  const options = { ...env, R76S_PROBE_INTERVAL_SECONDS: '600', R76S_PROXY_ROUTING_MARK: '1186' };
+  const res = await worker.fetch(request({ profile: 'r76s' }), options, {});
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.deepEqual(text.match(/^\s+interval: \d+$/gm)?.map(line => line.trim()), ['interval: 600']);
+  assert.match(text, /routing-mark: 1186/);
 });
 
 test('R76S rejects a different template, target or node-list output before any backend request', async t => {
