@@ -3,6 +3,8 @@ import os
 import sys
 import tempfile
 import time
+from contextlib import ExitStack
+from pathlib import Path, PurePosixPath
 
 import requests
 import yaml
@@ -17,12 +19,14 @@ def _missing_upstream(error):
     return response is not None and response.status_code in (404, 410)
 
 
-def get_github_api_files(repo, folder, branch, token):
-    """List the complete configured tree, preserving the existing traversal order.
+def _relative_path(value):
+    return (isinstance(value, str) and '\\' not in value and ':' not in value
+            and '\x00' not in value and all(part not in ('', '.', '..')
+                                            for part in value.split('/')))
 
-    Raise on an incomplete listing so a partial API response is never treated as
-    a complete successful backup. No local files are changed while listing.
-    """
+
+def get_github_api_files(repo, folder, branch, token, exclude_dirs=()):
+    """List one source completely before releasing any of its download tasks."""
     api_url = f'https://api.github.com/repos/{repo}/contents/{folder}?ref={branch}'
     headers = {
         'Authorization': f'token {token}',
@@ -30,7 +34,7 @@ def get_github_api_files(repo, folder, branch, token):
     }
     all_files = []
 
-    def fetch_recursive(url):
+    def fetch_recursive(url, parent):
         with requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT) as response:
             response.raise_for_status()
             contents = response.json()
@@ -39,70 +43,52 @@ def get_github_api_files(repo, folder, branch, token):
         for item in contents:
             if not isinstance(item, dict) or 'type' not in item:
                 raise ValueError('Invalid item in GitHub directory listing')
+            name = item.get('name')
+            if not _relative_path(name) or '/' in name:
+                raise ValueError('Invalid name in GitHub directory listing')
+            relative_path = (parent / name).as_posix()
             if item['type'] == 'file':
-                if not all(isinstance(item.get(k), str) and item[k]
-                           for k in ('name', 'download_url')):
-                    raise ValueError('GitHub file has no usable name/download URL')
-                all_files.append(item)
-            elif item['type'] == 'dir':
+                if not isinstance(item.get('download_url'), str) or not item['download_url']:
+                    raise ValueError('GitHub file has no usable download URL')
+                all_files.append((relative_path, item['download_url']))
+            elif item['type'] == 'dir' and relative_path not in exclude_dirs:
                 if not isinstance(item.get('url'), str) or not item['url']:
                     raise ValueError('GitHub directory has no usable API URL')
                 time.sleep(1)
-                fetch_recursive(item['url'])
+                fetch_recursive(item['url'], parent / name)
 
-    fetch_recursive(api_url)
+    fetch_recursive(api_url, PurePosixPath())
     return all_files
 
 
-def download_file(url, destination_path):
-    """Replace only after a complete download; preserve old data on every failure."""
-    temporary_path = None
-    try:
-        # Do not log subscription URLs or query parameters.
-        print(f"Downloading {destination_path}...")
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                          'AppleWebKit/537.36 (KHTML, like Gecko) '
-                          'Chrome/121.0.0.0 Safari/537.36',
-        }
-        with requests.get(url, headers=headers, stream=True,
-                          timeout=REQUEST_TIMEOUT) as response:
+def download_file(url, destinations):
+    """Fetch once. Finish and close every temporary copy before replacing files."""
+    print(f"Downloading {destinations[0]}...")
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/121.0.0.0 Safari/537.36',
+    }
+    with ExitStack() as cleanup:
+        with requests.get(url, headers=headers, stream=True, timeout=REQUEST_TIMEOUT) as response:
             response.raise_for_status()
-            directory = os.path.dirname(os.path.abspath(destination_path))
-            os.makedirs(directory, exist_ok=True)
-            # Same directory guarantees the replacement stays on the same volume.
-            with tempfile.NamedTemporaryFile(
-                    mode='wb', dir=directory, prefix='.download-', suffix='.tmp',
-                    delete=False) as temporary:
-                temporary_path = temporary.name
+            copies = []
+            with ExitStack() as handles:
+                for destination in destinations:
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    temporary = handles.enter_context(tempfile.NamedTemporaryFile(
+                        mode='wb', dir=destination.parent, prefix='.download-',
+                        suffix='.tmp', delete=False))
+                    copies.append(temporary)
+                    cleanup.callback(Path(temporary.name).unlink, missing_ok=True)
                 for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
+                    for temporary in copies:
                         temporary.write(chunk)
-                temporary.flush()
-                os.fsync(temporary.fileno())
-        os.replace(temporary_path, destination_path)
-        temporary_path = None
-        print(f"Successfully downloaded {os.path.basename(destination_path)}")
-        return True
-    except requests.exceptions.RequestException as error:
-        if _missing_upstream(error) and os.path.isfile(destination_path):
-            print(f"Warning: upstream removed/unavailable (404/410); retained "
-                  f"historical backup {destination_path}")
-            return True
-        print(f"Error downloading {destination_path}: {type(error).__name__}")
-        return False
-    except (OSError, ValueError) as error:
-        print(f"Error writing {destination_path}: {type(error).__name__}")
-        return False
-    finally:
-        if temporary_path is not None:
-            try:
-                os.unlink(temporary_path)
-            except FileNotFoundError:
-                pass
-            except OSError:
-                # Never remove the destination to compensate for cleanup failure.
-                print(f"Warning: unable to remove temporary file {temporary_path}")
+                for temporary in copies:
+                    temporary.flush()
+                    os.fsync(temporary.fileno())
+        for temporary, destination in zip(copies, destinations):
+            os.replace(temporary.name, destination)
 
 
 def _validate_config(config):
@@ -128,6 +114,46 @@ def _validate_config(config):
             for item in config.get('folders', [])]:
         if not isinstance(branch, str) or not branch:
             raise ValueError('Branch must be a nonempty string')
+    for folder in config.get('folders', []):
+        for key in ('exclude_dirs', 'legacy_aliases'):
+            paths = folder.get(key, [])
+            if not isinstance(paths, list) or not all(_relative_path(path) for path in paths):
+                raise ValueError(f"Invalid {key} in folder configuration")
+        if folder.get('legacy_aliases') and not (
+                isinstance(folder.get('legacy_location'), str) and folder['legacy_location']):
+            raise ValueError('Legacy aliases need a destination directory')
+
+
+def plan_downloads(config, token):
+    tasks = [(item['url'], [Path(item['download_location']) / item['filename']])
+             for item in config.get('files', [])]
+    failures = 0
+    for folder in config.get('folders', []):
+        try:
+            listing = get_github_api_files(
+                folder['github_repo'], folder['folder_path'],
+                folder.get('branch', config.get('branch', 'main')), token,
+                folder.get('exclude_dirs', []))
+        except (requests.RequestException, ValueError) as error:
+            print(f"Skipped {folder['github_repo']}/{folder['folder_path']}: "
+                  f"{type(error).__name__}. Retained its historical backups.")
+            failures += 1
+            continue
+        aliases = set(folder.get('legacy_aliases', []))
+        for relative_path, url in listing:
+            if relative_path.endswith(folder['file_extension']):
+                destinations = [Path(folder['backup_location']) / relative_path]
+                if relative_path in aliases:
+                    destinations.append(Path(folder['legacy_location']) / Path(relative_path).name)
+                tasks.append((url, destinations))
+    claimed = set()
+    for _, destinations in tasks:
+        for path in destinations:
+            key = path.resolve()
+            if key in claimed:
+                raise ValueError(f"Multiple writes planned for {path}")
+            claimed.add(key)
+    return tasks, failures
 
 
 def main():
@@ -145,46 +171,37 @@ def main():
         print(f"Error reading configuration: {type(error).__name__}")
         return 1
 
-    files_to_download = list(config.get('files', []))
-    default_branch = config.get('branch', 'main')
     try:
-        for folder_conf in config.get('folders', []):
-            api_files = get_github_api_files(
-                folder_conf['github_repo'],
-                folder_conf['folder_path'],
-                folder_conf.get('branch', default_branch),
-                github_token,
-            )
-            for file_info in api_files:
-                if file_info['name'].endswith(folder_conf['file_extension']):
-                    # Compatibility: preserve legacy URLs and traversal ordering.
-                    # Do not silently switch existing flattened aliases to a
-                    # different upstream file. Tree migration needs a separate plan.
-                    files_to_download.append({
-                        'filename': file_info['name'],
-                        'url': file_info['download_url'],
-                        'download_location': folder_conf['backup_location'],
-                    })
-    except (requests.exceptions.RequestException, ValueError) as error:
-        print(f"Error listing upstream files: {type(error).__name__}; "
-              "no downloads were started")
+        tasks, failures = plan_downloads(config, github_token)
+    except ValueError as error:
+        print(f"Invalid backup plan: {error}")
         return 1
 
-    if not files_to_download:
-        print('No files to download; existing historical backups retained.')
-        return 0
-
-    failures = 0
-    print(f"Found a total of {len(files_to_download)} files to download.")
-    for item in files_to_download:
-        full_path = os.path.join(item['download_location'], item['filename'])
-        if not download_file(item['url'], full_path):
-            failures += 1
+    completed = []
+    print(f"Planned {len(tasks)} downloads.")
+    for url, destinations in tasks:
+        try:
+            download_file(url, destinations)
+            completed.extend(destinations)
+        except requests.RequestException as error:
+            if _missing_upstream(error) and all(path.is_file() for path in destinations):
+                print(f"Retained historical backup for {destinations[0]} (404/410).")
+            else:
+                print(f"Skipped {destinations[0]}: {type(error).__name__}")
+                failures += 1
+        except OSError as error:
+            print(f"Error writing {destinations[0]}: {type(error).__name__}. Aborting publish.")
+            return 1
         time.sleep(0.5)
+    manifest = os.getenv('BACKUP_PATHS_FILE')
+    if manifest:
+        with open(manifest, 'wb') as output:
+            for path in completed:
+                output.write(os.fsencode(path.as_posix()) + b'\0')
     if failures:
-        print(f"Backup failed: {failures} download(s) failed; do not publish this run.")
-        return 1
-    print('Backup completed; no historical files were deleted.')
+        print(f"Partial backup: {failures} source(s) failed, {len(completed)} paths refreshed.")
+        return 2
+    print(f"Backup completed: {len(completed)} paths refreshed.")
     return 0
 
 
