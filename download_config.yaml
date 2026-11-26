@@ -5,6 +5,9 @@ files:
   # - filename: v2rayfree
   #   url: https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2
   #   download_location: ./downloads/
+  - filename: OverseasAI.list
+    url: https://raw.githubusercontent.com/viewer12/OverseasAI.list/main/rule/Clash/OverseasAI/OverseasAI.list
+    download_location: ./config/Ruleset/viewer12/
   - filename: GeneralClashConfig.yml
     url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/GeneralClashConfig.yml
     download_location: ./config/Ruleset/ACL4SSR/
