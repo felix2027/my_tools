@@ -1,91 +1,62 @@
+# ====================================================
+# Clash 规则全量冷备配置（配合 git clone --depth 1 --sparse）
+# 1. 全量镜像 viewer12 / blackmatrix7 / ACL4SSR 三大仓库的所有 Clash .list 规则
+# 2. 通过 legacy_aliases 自动同步更新原扁平路径文件，100% 兼容现有所有 .ini 配置
+# 3. 如需连同 .yaml 规则一并冷备，可将对应仓库的 file_extension: .list 改为 [.list, .yaml]
+# ====================================================
+
 files:
-  # - filename: config
-  #   url: http://106.75.143.245:3390/api/v1/client/subscribe?token=46df0e5a0b59a78ab3102339d9245f24
-  #   download_location: ./downloads/
-  # - filename: v2rayfree
-  #   url: https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2
-  #   download_location: ./downloads/
-  - filename: OverseasAI.list
-    url: https://raw.githubusercontent.com/viewer12/OverseasAI.list/main/rule/Clash/OverseasAI/OverseasAI.list
-    download_location: ./config/Ruleset/viewer12/
   - filename: GeneralClashConfig.yml
     url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/GeneralClashConfig.yml
     download_location: ./config/Ruleset/ACL4SSR/
-  - filename: AdvertisingLite.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AdvertisingLite/AdvertisingLite.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Hijacking.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Hijacking/Hijacking.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: EasyPrivacy.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/EasyPrivacy/EasyPrivacy.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Privacy.list
-    url:  https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Privacy/Privacy.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Advertising.list
-    url:  https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Advertising/Advertising.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: OpenAI.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/OpenAI/OpenAI.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Gemini.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Gemini/Gemini.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Claude.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Claude/Claude.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Copilot.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Copilot/Copilot.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Apple.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Apple/Apple.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Bahamut.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Bahamut/Bahamut.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: BiliBili.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/BiliBili/BiliBili.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Game.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Game/Game.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Microsoft.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Microsoft/Microsoft.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: MicrosoftEdge.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/MicrosoftEdge/MicrosoftEdge.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: OneDrive.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/OneDrive/OneDrive.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: GoogleFCM.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/GoogleFCM/GoogleFCM.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Direct.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Direct/Direct.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: ChinaMax.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/refs/heads/master/rule/Clash/ChinaMax/ChinaMax.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: China.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/China/China.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: GovCN.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/GovCN/GovCN.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: PrivateTracker.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/PrivateTracker/PrivateTracker.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: CloudCN.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Cloud/CloudCN/CloudCN.list
-    download_location: ./config/Ruleset/blackmatrix7/
-  - filename: Lan.list
-    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Lan/Lan.list
-    download_location: ./config/Ruleset/blackmatrix7/
 
-# Each historical flat URL has one verified upstream owner. New files use their source path.
 folders:
+  # 1. viewer12 海外 AI 规则全量冷备
+  - github_repo: viewer12/OverseasAI.list
+    branch: main
+    folder_path: rule/Clash
+    file_extension: .list
+    backup_location: ./config/Ruleset/viewer12/Clash/
+    legacy_location: ./config/Ruleset/viewer12/
+    legacy_aliases:
+      - OverseasAI/OverseasAI.list
+
+  # 2. blackmatrix7 所有 Clash 分流规则全量冷备（500+ 目录）
+  # 全量树保存在 ./config/Ruleset/blackmatrix7/Clash/ 下；
+  # 同时将现有配置引用的 24 个常用列表同步写回原扁平目录，确保历史链接零改动可用
+  - github_repo: blackmatrix7/ios_rule_script
+    branch: master
+    folder_path: rule/Clash
+    file_extension: .list
+    backup_location: ./config/Ruleset/blackmatrix7/Clash/
+    legacy_location: ./config/Ruleset/blackmatrix7/
+    legacy_aliases:
+      - Advertising/Advertising.list
+      - AdvertisingLite/AdvertisingLite.list
+      - Apple/Apple.list
+      - Bahamut/Bahamut.list
+      - BiliBili/BiliBili.list
+      - China/China.list
+      - ChinaMax/ChinaMax.list
+      - Claude/Claude.list
+      - Cloud/CloudCN/CloudCN.list
+      - Copilot/Copilot.list
+      - Direct/Direct.list
+      - EasyPrivacy/EasyPrivacy.list
+      - Game/Game.list
+      - Gemini/Gemini.list
+      - GoogleFCM/GoogleFCM.list
+      - GovCN/GovCN.list
+      - Hijacking/Hijacking.list
+      - Lan/Lan.list
+      - Microsoft/Microsoft.list
+      - MicrosoftEdge/MicrosoftEdge.list
+      - OneDrive/OneDrive.list
+      - OpenAI/OpenAI.list
+      - Privacy/Privacy.list
+      - PrivateTracker/PrivateTracker.list
+
+  # 3. ACL4SSR 根目录与 Ruleset 子目录全量冷备（同一仓库会自动合并为 1 次 git clone）
   - github_repo: ACL4SSR/ACL4SSR
     branch: master
     folder_path: Clash
@@ -110,6 +81,7 @@ folders:
       - Telegram.list
       - UnBan.list
       - Xbox.list
+
   - github_repo: ACL4SSR/ACL4SSR
     branch: master
     folder_path: Clash/Ruleset
