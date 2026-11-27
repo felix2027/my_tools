@@ -1,0 +1,499 @@
+# ====================================================
+# 原生 Mihomo 终极防泄漏配置（IPv4/IPv6 双栈 Redirect+TUN 版）
+# 核心特性：
+# 1. 策略组命名、顺序（含 Fallback: TW->SG->JP->US->HK）及规则集全面对齐 proxy_config_next.ini
+# 2. 专为 AdGuardHome 独占 53 端口设计（Redir-Host + 清空 dns-hijack + 全端口嗅探还原）
+# 3. 四重隐私防泄漏：DNS 零泄漏闭环 + WebRTC(含国内双栈STUN穿透防护) + 封堵国产App HttpDNS/私自DoH + IPv6 双栈接管防裸奔
+# ====================================================
+
+# --------------------- [1. 机场订阅源 (Proxy Providers)] ---------------------
+provider-base: &provider_base
+  type: http
+  interval: 43200 # 每 12 小时自动同步一次订阅节点
+  proxy: DIRECT
+  header:
+    User-Agent:
+      - "Clash.Meta/v1.19"
+      - "mihomo"
+  health-check:
+    enable: true
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    timeout: 5000
+    lazy: true
+
+proxy-providers:
+  Airport_1:
+    <<: *provider_base
+    url: "https://在这里填入你的主力机场原始订阅链接"
+    path: ./proxy_provider/airport_1.yaml
+    override:
+      udp: true
+      additional-suffix: " [主力]"
+
+  # 如需添加备用机场或自建节点，取消注释填入即可：
+  # Airport_2:
+  #   <<: *provider_base
+  #   url: "https://在这里填入你的备用机场或自建订阅链接"
+  #   path: ./proxy_provider/airport_2.yaml
+  #   override:
+  #     udp: true
+  #     additional-suffix: " [备用]"
+
+
+# --------------------- [2. 全局、Geo数据库与防探测核心参数] ---------------------
+mixed-port: 7890
+redir-port: 7892
+tproxy-port: 7895
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: warning
+ipv6: true                       # 开启 IPv6 双栈支持（配合下方双栈 TUN 与 OpenClash IPv6 流量代理）
+
+# R76S 性能与反探测优化
+unified-delay: true              # 统一真实 HTTP 延迟测试
+tcp-concurrent: true             # 多 IP 并发连接择优，大幅提升网页首屏打开速度
+find-process-mode: off           # 软路由无需查本机进程，降低转发开销
+global-client-fingerprint: chrome # 伪装 Chrome TLS 指纹，对抗 GFW 主动探测识别
+keep-alive-idle: 600
+keep-alive-interval: 30
+
+# 自动维护 GeoIP / ASN 数据库（确保 OverseasAI.list 中的 IP-ASN 规则 100% 正常解析）
+geodata-mode: true
+geo-auto-update: true
+geo-update-interval: 48
+geox-url:
+  geoip: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/release/geoip.dat"
+  geosite: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/release/geosite.dat"
+  mmdb: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/release/country.mmdb"
+  asn: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/release/GeoLite2-ASN.mmdb"
+
+profile:
+  store-selected: true
+
+# 双栈 TUN 模式参数（完美配合 OpenClash「Redir-Host 混合模式(Redirect+TUN)」或「纯 TUN 模式」）
+# dns-hijack 已置空，绝不抢占 AdGuardHome 的 53 端口
+tun:
+  enable: true
+  stack: mixed
+  device: utun
+  auto-route: true
+  auto-detect-interface: true
+  strict-route: false
+  inet4-address:
+    - 198.18.0.1/30
+  inet6-address:
+    - fdfe:dcba:9876::1/126
+  dns-hijack: []
+  route-exclude-address:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 100.64.0.0/10              # 豁免 Tailscale IPv4 组网网段
+    - "::1/128"
+    - "fe80::/10"
+    - "fc00::/7"                 # 豁免局域网 IPv6 ULA 私有网段与 Tailscale IPv6 (fd7a::/48 已含在内)
+
+
+# --------------------- [3. 域名嗅探 (Sniffer)] ---------------------
+# 配合 AGH 真实 IP 模式的核心：从流量包实时还原域名以精准分流，并将海外连接目标覆写为干净域名交由节点远端解析
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  override-destination: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880, 2052, 2082, 2086, 2095]
+      override-destination: true
+    TLS:
+      ports: [443, 8443, 2053, 2083, 2087, 2096]
+    QUIC:
+      ports: [443, 8443, 2053, 2083, 2087, 2096]
+  skip-domain:
+    - "Mijia Cloud"              # 豁免米家智能家居，防设备离线
+    - "+.push.apple.com"         # 豁免苹果 APNs 推送
+    - "+.lan"
+    - "+.local"
+    - "+.ts.net"
+    - "+.tailscale.com"
+  skip-dst-address:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 100.64.0.0/10
+    - "::1/128"
+    - "fe80::/10"
+    - "fc00::/7"
+
+
+# --------------------- [4. 零泄漏分流 DNS 后端 (127.0.0.1:7874)] ---------------------
+# 不碰局域网 53 端口；推荐在 AdGuardHome 上游中仅填 127.0.0.1:7874，构成“AGH管去广告与统计 -> Mihomo管国内外零泄漏解析”闭环
+dns:
+  enable: true
+  listen: 127.0.0.1:7874
+  ipv6: true                     # 开启 IPv6 AAAA 解析（国内 IPv6 走直连，海外 IPv6 压入代理隧道防裸奔）
+  prefer-h3: false
+  enhanced-mode: redir-host      # 真实 IP 模式，安全适配 AGH 缓存，绝不产生 Fake-IP 串台
+
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+
+  proxy-server-nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+
+  direct-nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+
+  # 关键防泄漏开关：下方默认海外 DoH 查询强制经过 Proxies 代理隧道发出，杜绝国内递归痕迹
+  respect-rules: true
+
+  nameserver-policy:
+    "+.ts.net": 100.100.100.100
+    "rule-set:private_domain,cn_domain":
+      - https://dns.alidns.com/dns-query
+      - https://doh.pub/dns-query
+
+  nameserver:
+    - https://cloudflare-dns.com/dns-query
+    - https://dns.google/dns-query
+
+
+# --------------------- [5. 策略组 (完全对齐 proxy_config_next.ini)] ---------------------
+auto-base: &auto_base
+  type: url-test
+  include-all-providers: true
+  url: http://www.gstatic.com/generate_204
+  interval: 300
+  timeout: 5000
+  tolerance: 50
+  lazy: true
+  exclude-filter: '(?i)剩余|流量|到期|官网|套餐|重置|群|失联|频道|网址|(?<![0-9.])(?:1\.\d*[1-9]\d*|(?:[2-9]|[1-9]\d+)(?:\.\d+)?)\s*(?:[x×](?![a-z0-9])|倍)|(?:(?<![a-z0-9])[x×]|倍率?\s*[:：]?)\s*(?:1\.\d*[1-9]\d*|(?:[2-9]|[1-9]\d+)(?:\.\d+)?)(?![0-9.])'
+
+proxy-groups:
+  # --- 核心分组 ---
+  - name: Proxies
+    type: select
+    proxies: [Auto, HK, TW, SG, JP, US, Fallback, Manual, DIRECT]
+
+  - name: Manual
+    type: select
+    include-all-providers: true
+    exclude-filter: '(?i)剩余|流量|到期|官网|套餐|重置|群|失联|频道|网址'
+
+  - name: Auto
+    <<: *auto_base
+
+  # 保持你在 proxy_config_next.ini 设定的 TW -> SG -> JP -> US -> HK 顺序
+  - name: Fallback
+    type: fallback
+    url: http://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 5000
+    lazy: true
+    proxies: [TW, SG, JP, US, HK]
+
+  # --- 应用与防泄漏专属分组 ---
+  - name: Ai
+    type: select
+    proxies: [AI_Auto, US, SG, JP, TW, Manual, Proxies]
+
+  - name: AI_Auto
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    timeout: 5000
+    tolerance: 50
+    lazy: true
+    proxies: [SG, JP, TW, US]
+
+  - name: Media
+    type: select
+    proxies: [Proxies, SG, TW, JP, HK, US, Manual]
+
+  - name: Telegram
+    type: select
+    proxies: [Proxies, SG, HK, JP, US, Manual]
+
+  - name: Bahamut
+    type: select
+    proxies: [TW, HK, Proxies, Manual]
+
+  - name: Bilibili
+    type: select
+    proxies: [DIRECT, TW, HK, Proxies]
+
+  - name: Game
+    type: select
+    proxies: [Proxies, HK, TW, JP, SG, US, Manual, DIRECT]
+
+  - name: OneDrive
+    type: select
+    proxies: [Proxies, DIRECT, SG, HK, US, Manual]
+
+  - name: Microsoft
+    type: select
+    proxies: [DIRECT, Proxies, HK, SG, US, Manual]
+
+  - name: Apple
+    type: select
+    proxies: [DIRECT, Proxies, US, JP, TW, HK, Manual]
+
+  # WebRTC 防泄漏控制组：默认走 Proxies（兼顾网页连麦且只暴露代理 IP）；追求极致隐私可一键切为 REJECT
+  - name: WebRTC
+    type: select
+    proxies: [Proxies, REJECT, DIRECT]
+
+  # 劫持与旁路 DNS 封堵组（日常域名去广告交由 AdGuardHome 负责）
+  - name: AdBlock
+    type: select
+    proxies: [REJECT, DIRECT]
+
+  - name: Final
+    type: select
+    proxies: [Proxies, DIRECT, Manual]
+
+  # --- 区域自动测速组 ---
+  - name: HK
+    <<: *auto_base
+    filter: '(?i)港|(?<![a-z])(?:hk|hkg|hong[ _-]*kong)(?![a-z])|🇭🇰'
+
+  - name: TW
+    <<: *auto_base
+    filter: '(?i)台|臺|新北|彰化|高雄|(?<![a-z])(?:tw|twn|taiwan|taipei)(?![a-z])|🇹🇼'
+
+  - name: SG
+    <<: *auto_base
+    filter: '(?i)新加坡|狮城|獅城|坡县|(?<![a-z])(?:sg|sgp|singapore)(?![a-z])|🇸🇬'
+
+  - name: JP
+    <<: *auto_base
+    filter: '(?i)日本|川日|东京|東京|大阪|泉日|埼玉|沪日|深日|京都|名古屋|(?<![a-z])(?:jp|jpn|japan|tokyo|osaka)(?![a-z])|🇯🇵'
+
+  - name: US
+    <<: *auto_base
+    filter: '(?i)美|波特兰|达拉斯|達拉斯|俄勒冈|凤凰城|费利蒙|硅谷|拉斯维加斯|洛杉矶|洛杉磯|圣何塞|圣克拉拉|西雅图|西雅圖|芝加哥|纽约|紐約|(?<![a-z])(?:us|usa|united[ _-]*states|america)(?![a-z])|🇺🇸'
+
+
+# --------------------- [6. 规则集提供者 (Rule Providers)] ---------------------
+rule-anchor:
+  list_classical: &list_classical
+    type: http
+    interval: 86400
+    behavior: classical
+    format: text
+    proxy: Proxies
+  mrs_domain: &mrs_domain
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    proxy: Proxies
+  mrs_ip: &mrs_ip
+    type: http
+    interval: 86400
+    behavior: ipcidr
+    format: mrs
+    proxy: Proxies
+
+rule-providers:
+  # --- 直接引用 felix2027/my_tools 仓库规则（与 proxy_config_next.ini 同源） ---
+  lan_direct:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Lan.list"
+    path: ./ruleset/lan_direct.list
+  pt_direct:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/PrivateTracker.list"
+    path: ./ruleset/pt_direct.list
+  custom_direct:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Direct.list"
+    path: ./ruleset/custom_direct.list
+  hijacking:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Hijacking.list"
+    path: ./ruleset/hijacking.list
+  overseas_ai:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/viewer12/OverseasAI.list"
+    path: ./ruleset/overseas_ai.list
+  bahamut:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Bahamut.list"
+    path: ./ruleset/bahamut.list
+  bilibili:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/BiliBili.list"
+    path: ./ruleset/bilibili.list
+  steam_cn:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/ACL4SSR/SteamCN.list"
+    path: ./ruleset/steam_cn.list
+  game_download_cn:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Game/GameDownloadCN/GameDownloadCN.list"
+    # 跑完一次你的全量冷备 Action 后，可换回自己的仓库地址：
+    # url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Clash/Game/GameDownloadCN/GameDownloadCN.list"
+    path: ./ruleset/game_download_cn.list
+  game:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Game.list"
+    path: ./ruleset/game.list
+  onedrive:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/OneDrive.list"
+    path: ./ruleset/onedrive.list
+  microsoft:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Microsoft.list"
+    path: ./ruleset/microsoft.list
+  apple:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Apple.list"
+    path: ./ruleset/apple.list
+  google_fcm:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/GoogleFCM.list"
+    path: ./ruleset/google_fcm.list
+  telegram:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/ACL4SSR/Telegram.list"
+    path: ./ruleset/telegram.list
+  proxy_gfw:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/ACL4SSR/Clash/ProxyGFWlist.list"
+    path: ./ruleset/proxy_gfw.list
+  gov_cn:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/GovCN.list"
+    path: ./ruleset/gov_cn.list
+  cloud_cn:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/CloudCN.list"
+    path: ./ruleset/cloud_cn.list
+  httpdns_block:
+    <<: *list_classical
+    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/BlockHttpDNS/BlockHttpDNS.list"
+    # 跑完一次你的全量冷备 Action 后，可换回自己的仓库地址：
+    # url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Clash/BlockHttpDNS/BlockHttpDNS.list"
+    path: ./ruleset/httpdns_block.list
+
+  # --- 高性能二进制 .mrs（供 DNS 分流、双栈 CN IP 匹配与无报错流媒体匹配使用） ---
+  private_domain:
+    <<: *mrs_domain
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"
+    path: ./ruleset/private_domain.mrs
+  proxy_media:
+    <<: *mrs_domain
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"
+    path: ./ruleset/geolocation_not_cn.mrs
+  youtube:
+    <<: *mrs_domain
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"
+    path: ./ruleset/youtube.mrs
+  netflix:
+    <<: *mrs_domain
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"
+    path: ./ruleset/netflix.mrs
+  disney:
+    <<: *mrs_domain
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/disney.mrs"
+    path: ./ruleset/disney.mrs
+  tiktok:
+    <<: *mrs_domain
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"
+    path: ./ruleset/tiktok.mrs
+  spotify:
+    <<: *mrs_domain
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/spotify.mrs"
+    path: ./ruleset/spotify.mrs
+  cn_domain:
+    <<: *mrs_domain
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"
+    path: ./ruleset/cn_domain.mrs
+
+  netflix_ip:
+    <<: *mrs_ip
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/netflix.mrs"
+    path: ./ruleset/netflix_ip.mrs
+  cn_ip:
+    <<: *mrs_ip
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"
+    path: ./ruleset/cn_ip.mrs
+
+
+# --------------------- [7. 分流与隐私防泄漏规则 (Rules)] ---------------------
+# 所有包含 IP 的 RULE-SET 均强制追加 ,no-resolve，严禁规则匹配中途触发本地 DNS 反查导致泄漏！
+rules:
+  # 1. 第一梯队：异地组网(Tailscale)、局域网、PT 站与直连白名单
+  - IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
+  - IP-CIDR6,fd7a:115c:a1e0::/48,DIRECT,no-resolve
+  - DST-PORT,41641,DIRECT
+  - DOMAIN-SUFFIX,ts.net,DIRECT
+  - DOMAIN-SUFFIX,tailscale.com,DIRECT
+  - RULE-SET,private_domain,DIRECT
+  - RULE-SET,lan_direct,DIRECT,no-resolve
+  - RULE-SET,pt_direct,DIRECT,no-resolve
+  - RULE-SET,custom_direct,DIRECT,no-resolve
+
+  # 2. 隐私防旁路：封堵国产 App 私自 HttpDNS、浏览器外部 DoH 探测与 iCloud 专用代理（强迫全部走你的 53 端口 AGH）
+  - RULE-SET,httpdns_block,AdBlock,no-resolve
+  - DOMAIN,use-application-dns.net,AdBlock
+  - DOMAIN,mask.icloud.com,AdBlock
+  - DOMAIN,mask-h2.icloud.com,AdBlock
+  - DST-PORT,853,Proxies
+
+  # 3. WebRTC 严防真实 IPv4/IPv6 泄漏（放在国内规则之前！防止网页利用国内双栈 STUN 服务器借直连套出家庭真实公网 IP）
+  - DST-PORT,3478,WebRTC
+  - DST-PORT,5349,WebRTC
+  - DST-PORT,19302,WebRTC
+  - DOMAIN-KEYWORD,stun,WebRTC
+
+  # 4. 特殊修正与防运营商劫持（常规域名去广告已交给 AdGuardHome）
+  - DOMAIN-SUFFIX,jsdelivr.net,Proxies
+  - RULE-SET,hijacking,AdBlock,no-resolve
+
+  # 5. 海外 AI 优先分流（防落入香港节点）
+  - RULE-SET,overseas_ai,Ai,no-resolve
+
+  # 6. 港台番剧
+  - RULE-SET,bahamut,Bahamut,no-resolve
+  - RULE-SET,bilibili,Bilibili,no-resolve
+
+  # 7. 游戏分流：国内下载 CDN 满速直连，商店/社区/联机走 Game 组
+  - RULE-SET,steam_cn,DIRECT,no-resolve
+  - RULE-SET,game_download_cn,DIRECT,no-resolve
+  - RULE-SET,game,Game,no-resolve
+
+  # 8. 微软与苹果：拆分 OneDrive 走代理，其余默认直连省流量
+  - RULE-SET,onedrive,OneDrive,no-resolve
+  - RULE-SET,microsoft,Microsoft,no-resolve
+  - RULE-SET,apple,Apple,no-resolve
+
+  # 9. 海外核心服务、流媒体与全球代理
+  - RULE-SET,google_fcm,Proxies,no-resolve
+  - RULE-SET,telegram,Telegram,no-resolve
+  - RULE-SET,youtube,Media
+  - RULE-SET,netflix,Media
+  - RULE-SET,disney,Media
+  - RULE-SET,tiktok,Media
+  - RULE-SET,spotify,Media
+  - RULE-SET,netflix_ip,Media,no-resolve
+  - RULE-SET,proxy_gfw,Proxies,no-resolve
+  - RULE-SET,proxy_media,Proxies
+
+  # 10. 国内全量直连（cn_ip.mrs 已原生涵盖大陆全量 IPv4 与 IPv6 网段）
+  - RULE-SET,gov_cn,DIRECT,no-resolve
+  - RULE-SET,cloud_cn,DIRECT,no-resolve
+  - RULE-SET,cn_domain,DIRECT
+  - RULE-SET,cn_ip,DIRECT,no-resolve
+
+  # 11. 最终兜底
+  - MATCH,Final
