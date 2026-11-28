@@ -9,20 +9,20 @@ hosts:
 # ================== 固定节点 ==================
 proxies:
   - name: "自定义节点1"
-    server: fde63gz6-1y61.aws-agent.biz
-    port: 10112
-    type: trojan
+    server: 
+    port: 
+    type: 
     password: 
-    sni: m.ctrip.com
+    sni: 
     skip-cert-verify: true
     udp: true
 
   - name: "自定义节点2"
-    server: b76c5sh0-fde6.aws-agent.biz
-    port: 10122
-    type: trojan
+    server: 
+    port: 
+    type: 
     password: 
-    sni: m.ctrip.com
+    sni: 
     skip-cert-verify: true
     udp: true
 
