@@ -1,0 +1,557 @@
+mode: rule
+allow-lan: true
+log-level: info
+
+hosts:
+  node1.example.com: target1.example.com
+  node2.example.com: target2.example.com
+
+# ================== 固定节点 ==================
+proxies:
+  - name: "自定义节点1"
+    server: fde63gz6-1y61.aws-agent.biz
+    port: 10112
+    type: trojan
+    password: 
+    sni: m.ctrip.com
+    skip-cert-verify: true
+    udp: true
+
+  - name: "自定义节点2"
+    server: b76c5sh0-fde6.aws-agent.biz
+    port: 10122
+    type: trojan
+    password: 
+    sni: m.ctrip.com
+    skip-cert-verify: true
+    udp: true
+
+# ================== 机场代理集合（自动/手动热更新，不重启） ==================
+proxy-providers:
+  sub1:
+    type: http
+    url: " "
+    path: ./proxy_providers/sub1.yaml
+    interval: 86400
+    proxy: DIRECT
+    header:
+      User-Agent:
+        - "clash-verge/v1.7.7"
+    exclude-filter: "(?i)剩余|流量|到期|官网|套餐|重置|群|失联|频道|网址"
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+    override:
+      udp: true
+      additional-prefix: "[sub1] "
+
+  sub2:
+    type: http
+    url: " "
+    path: ./proxy_providers/sub2.yaml
+    interval: 86400
+    proxy: DIRECT
+    header:
+      User-Agent:
+        - "clash-verge/v1.7.7"
+    exclude-filter: "(?i)剩余|流量|到期|官网|套餐|重置|群|失联|频道|网址"
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+    override:
+      udp: true
+      additional-prefix: "[sub2] "
+
+  sub3:
+    type: http
+    url: "    "
+    path: ./proxy_providers/sub3.yaml
+    interval: 86400
+    proxy: DIRECT
+    header:
+      User-Agent:
+        - "clash-verge/v1.7.7"
+    exclude-filter: "(?i)剩余|流量|到期|官网|套餐|重置|群|失联|频道|网址"
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+    override:
+      udp: true
+      additional-prefix: "[sub3] "
+
+# ================== 策略组 ==================
+proxy-groups:
+  - name: Proxies
+    type: select
+    proxies:
+      - Auto
+      - HK
+      - TW
+      - SG
+      - JP
+      - US
+      - Fallback
+      - Manual
+      - DIRECT
+
+  - name: Manual
+    type: select
+    use:
+      - sub1
+      - sub2
+      - sub3
+
+  - name: Auto
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 600
+    tolerance: 150
+    use:
+      - sub1
+      - sub2
+      - sub3
+
+  - name: Fallback
+    type: fallback
+    url: http://www.gstatic.com/generate_204
+    interval: 180
+    proxies:
+      - TW
+      - SG
+      - JP
+      - US
+      - HK
+
+  - name: Ai
+    type: select
+    proxies:
+      - AI_Auto
+      - "自定义节点1"
+      - "自定义节点2"
+      - US
+      - SG
+      - JP
+      - TW
+      - Manual
+      - Proxies
+
+  - name: Google
+    type: select
+    proxies:
+      - Ai
+      - Proxies
+      - Manual
+
+  - name: AI_Auto
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 600
+    tolerance: 150
+    exclude-filter: "(?i)港|(?<![a-z])(?:hk|hkg|hong[ _-]*kong)(?![a-z])|🇭🇰"
+    filter: "(?i)新加坡|狮城|獅城|坡县|日本|川日|东京|東京|大阪|泉日|埼玉|沪日|深日|京都|名古屋|台|臺|新北|彰化|高雄|美|波特兰|达拉斯|達拉斯|俄勒冈|凤凰城|费利蒙|硅谷|拉斯维加斯|洛杉矶|洛杉磯|圣何塞|圣克拉拉|西雅图|西雅圖|芝加哥|纽约|紐約|(?<![a-z])(?:sg|sgp|singapore|jp|jpn|japan|tokyo|osaka|tw|twn|taiwan|taipei|us|usa|united[ _-]*states|america)(?![a-z])|🇸🇬|🇯🇵|🇹🇼|🇺🇸"
+    use:
+      - sub1
+      - sub2
+      - sub3
+
+  - name: Media
+    type: select
+    proxies:
+      - Proxies
+      - SG
+      - TW
+      - JP
+      - HK
+      - US
+      - Manual
+
+  - name: Telegram
+    type: select
+    proxies:
+      - Proxies
+      - SG
+      - HK
+      - JP
+      - US
+      - Manual
+
+  - name: Bahamut
+    type: select
+    proxies:
+      - TW
+      - HK
+      - Proxies
+      - Manual
+
+  - name: Bilibili
+    type: select
+    proxies:
+      - DIRECT
+      - TW
+      - HK
+      - Manual
+      - Proxies
+
+  - name: Game
+    type: select
+    proxies:
+      - Proxies
+      - HK
+      - TW
+      - JP
+      - SG
+      - US
+      - Manual
+      - DIRECT
+
+  - name: OneDrive
+    type: select
+    proxies:
+      - Proxies
+      - DIRECT
+      - SG
+      - HK
+      - US
+      - Manual
+
+  - name: Microsoft
+    type: select
+    proxies:
+      - DIRECT
+      - Proxies
+      - HK
+      - SG
+      - US
+      - Manual
+
+  - name: Apple
+    type: select
+    proxies:
+      - DIRECT
+      - Proxies
+      - US
+      - JP
+      - TW
+      - HK
+      - Manual
+
+  - name: AdBlock
+    type: select
+    proxies:
+      - REJECT
+      - DIRECT
+
+  - name: Final
+    type: select
+    proxies:
+      - Proxies
+      - DIRECT
+      - Manual
+
+  - name: HK
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 600
+    tolerance: 150
+    filter: "(?i)港|(?<![a-z])(?:hk|hkg|hong[ _-]*kong)(?![a-z])|🇭🇰"
+    use:
+      - sub1
+      - sub2
+      - sub3
+
+  - name: TW
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 600
+    tolerance: 150
+    filter: "(?i)台|臺|新北|彰化|高雄|(?<![a-z])(?:tw|twn|taiwan|taipei)(?![a-z])|🇹🇼"
+    use:
+      - sub1
+      - sub2
+      - sub3
+
+  - name: SG
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 600
+    tolerance: 150
+    filter: "(?i)新加坡|狮城|獅城|坡县|(?<![a-z])(?:sg|sgp|singapore)(?![a-z])|🇸🇬"
+    use:
+      - sub1
+      - sub2
+      - sub3
+
+  - name: JP
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 600
+    tolerance: 150
+    filter: "(?i)日本|川日|东京|東京|大阪|泉日|埼玉|沪日|深日|京都|名古屋|(?<![a-z])(?:jp|jpn|japan|tokyo|osaka)(?![a-z])|🇯🇵"
+    use:
+      - sub1
+      - sub2
+      - sub3
+
+  - name: US
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 600
+    tolerance: 150
+    filter: "(?i)美|波特兰|达拉斯|達拉斯|俄勒冈|凤凰城|费利蒙|硅谷|拉斯维加斯|洛杉矶|洛杉磯|圣何塞|圣克拉拉|西雅图|西雅圖|芝加哥|纽约|紐約|(?<![a-z])(?:us|usa|united[ _-]*states|america)(?![a-z])|🇺🇸"
+    use:
+      - sub1
+      - sub2
+      - sub3
+
+# ================== 规则集合 ==================
+rule-providers:
+  Lan:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Lan.list"
+    path: ./rule_providers/Lan.list
+    interval: 86400
+    proxy: Proxies
+
+  PrivateTracker:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/PrivateTracker.list"
+    path: ./rule_providers/PrivateTracker.list
+    interval: 86400
+    proxy: Proxies
+
+  AdvertisingLite:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/AdvertisingLite.list"
+    path: ./rule_providers/AdvertisingLite.list
+    interval: 86400
+    proxy: Proxies
+
+  Hijacking:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Hijacking.list"
+    path: ./rule_providers/Hijacking.list
+    interval: 86400
+    proxy: Proxies
+
+  GoogleDeepMind:
+    type: http
+    behavior: domain
+    format: yaml
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google-deepmind.yaml"
+    path: ./rule_providers/GoogleDeepMind.yaml
+    interval: 86400
+    proxy: Proxies
+
+  OverseasAI:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/viewer12/OverseasAI.list"
+    path: ./rule_providers/OverseasAI.list
+    interval: 86400
+    proxy: Proxies
+
+  Bahamut:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Bahamut.list"
+    path: ./rule_providers/Bahamut.list
+    interval: 86400
+    proxy: Proxies
+
+  Bilibili:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/BiliBili.list"
+    path: ./rule_providers/Bilibili.list
+    interval: 86400
+    proxy: Proxies
+
+  SteamCN:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/ACL4SSR/SteamCN.list"
+    path: ./rule_providers/SteamCN.list
+    interval: 86400
+    proxy: Proxies
+
+  GameDownload:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/ACL4SSR/GameDownload.list"
+    path: ./rule_providers/GameDownload.list
+    interval: 86400
+    proxy: Proxies
+
+  GameDownloadCN:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Clash/Game/GameDownloadCN/GameDownloadCN.list"
+    path: ./rule_providers/GameDownloadCN.list
+    interval: 86400
+    proxy: Proxies
+
+  Game:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Game.list"
+    path: ./rule_providers/Game.list
+    interval: 86400
+    proxy: Proxies
+
+  OneDrive:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/OneDrive.list"
+    path: ./rule_providers/OneDrive.list
+    interval: 86400
+    proxy: Proxies
+
+  Microsoft:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Microsoft.list"
+    path: ./rule_providers/Microsoft.list
+    interval: 86400
+    proxy: Proxies
+
+  Apple:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Apple.list"
+    path: ./rule_providers/Apple.list
+    interval: 86400
+    proxy: Proxies
+
+  GoogleFCM:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/GoogleFCM.list"
+    path: ./rule_providers/GoogleFCM.list
+    interval: 86400
+    proxy: Proxies
+
+  Telegram:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/ACL4SSR/Telegram.list"
+    path: ./rule_providers/Telegram.list
+    interval: 86400
+    proxy: Proxies
+
+  ProxyMedia:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/ACL4SSR/Clash/ProxyMedia.list"
+    path: ./rule_providers/ProxyMedia.list
+    interval: 86400
+    proxy: Proxies
+
+  Google:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Clash/Google/Google.list"
+    path: ./rule_providers/Google.list
+    interval: 86400
+    proxy: Proxies
+
+  ProxyGFWlist:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/ACL4SSR/Clash/ProxyGFWlist.list"
+    path: ./rule_providers/ProxyGFWlist.list
+    interval: 86400
+    proxy: Proxies
+
+  Direct:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/Direct.list"
+    path: ./rule_providers/Direct.list
+    interval: 86400
+    proxy: Proxies
+
+  GovCN:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/GovCN.list"
+    path: ./rule_providers/GovCN.list
+    interval: 86400
+    proxy: Proxies
+
+  CloudCN:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/CloudCN.list"
+    path: ./rule_providers/CloudCN.list
+    interval: 86400
+    proxy: Proxies
+
+  ChinaMax:
+    type: http
+    behavior: classical
+    format: text
+    url: "https://raw.githubusercontent.com/felix2027/my_tools/main/config/Ruleset/blackmatrix7/ChinaMax.list"
+    path: ./rule_providers/ChinaMax.list
+    interval: 86400
+    proxy: Proxies
+
+# ================== 5. 分流规则（与 proxy_config_next.ini 顺序完全一致） ==================
+rules:
+  - DOMAIN-SUFFIX,ts.net,DIRECT
+  - DOMAIN-SUFFIX,tailscale.com,DIRECT
+  - RULE-SET,Lan,DIRECT
+  - RULE-SET,PrivateTracker,DIRECT
+  - DOMAIN-SUFFIX,jsdelivr.net,Proxies
+  - RULE-SET,AdvertisingLite,AdBlock
+  - RULE-SET,Hijacking,AdBlock
+  - RULE-SET,GoogleDeepMind,Ai
+  - RULE-SET,OverseasAI,Ai
+  - RULE-SET,Bahamut,Bahamut
+  - RULE-SET,Bilibili,Bilibili
+  - RULE-SET,SteamCN,DIRECT
+  - RULE-SET,GameDownload,DIRECT
+  - RULE-SET,GameDownloadCN,DIRECT
+  - RULE-SET,Game,Game
+  - RULE-SET,OneDrive,OneDrive
+  - RULE-SET,Microsoft,Microsoft
+  - RULE-SET,Apple,Apple
+  - RULE-SET,GoogleFCM,Google
+  - RULE-SET,Telegram,Telegram
+  - RULE-SET,ProxyMedia,Media
+  - RULE-SET,Google,Google
+  - RULE-SET,ProxyGFWlist,Proxies
+  - RULE-SET,Direct,DIRECT
+  - RULE-SET,GovCN,DIRECT
+  - RULE-SET,CloudCN,DIRECT
+  - RULE-SET,ChinaMax,DIRECT
+  - GEOIP,CN,DIRECT,no-resolve
+  - MATCH,Final
